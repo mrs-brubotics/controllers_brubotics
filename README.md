@@ -26,3 +26,44 @@ It follows the same model as in the MRS controllers package, and even the type i
 This is a .cfg file, which means it is a file used for parameter configuration that catkin automatically turns into a header file with a specified name. In this case, the file stays the same as in the mrs_uav_controllers package, and the name set for the automatically generated file changes.
 
 ### Integrating it with the mrs_uav_manager
+
+*This section will probably be modified soon. The goal is to keep the changes to the mrs_workspace folders and files to a minimum*
+
+The only thing that needs to change inside the package is the addition of the parameter loader for our new controllers to the `control_manager.launch` file and some modifications in the config files. The following lines were added after the SO3 parameter loader:
+```
+<!-- SO3_Interns -->
+<rosparam ns="so3_controller_interns" file="$(find controllers_brubotics)/config/default/so3_interns.yaml" />
+<rosparam ns="so3_controller_interns" file="$(find controllers_brubotics)/config/$(arg RUN_TYPE)/$(arg UAV_TYPE)/so3_interns.yaml" />
+<rosparam if="$(eval not arg('custom_config_so3_controller_interns') == '')" ns="so3_controller_interns" file="$(arg custom_config_so3_controller_interns)" />
+<param name="so3_controller_interns/enable_profiler" type="bool" value="$(arg PROFILER)" />
+<remap from="~so3_controller_interns/profiler" to="profiler" />
+```
+And the following line was added in the arguments definition:
+
+```
+<arg name="custom_config_so3_controller_interns" default="" />
+```
+
+To the `control_manager.yaml` file in the config folder, the following lines were added:
+
+```
+controllers : [
+  "So3Controller",
+  "MpcController",
+  "NsfController",
+  "FailsafeController",
+  "EmergencyController",
+  "So3ControllerInterns",
+]
+```
+
+And to the `controllers.yaml`, the address of the new controller was added:
+
+```
+So3ControllerInterns:
+  address: "controllers_brubotics/So3ControllerInterns"
+  namespace: "so3_controller_interns"
+  eland_threshold: 300 # [m], position error triggering eland
+  failsafe_threshold: 300 # [m], position error triggering failsafe land
+  odometry_innovation_threshold: 300 # [m], position odometry innovation threshold
+```
