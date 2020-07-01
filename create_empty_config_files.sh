@@ -4,7 +4,7 @@ read filename
 declare -a run_type_list=("simulation" "uav")
 declare -a uav_type_list=("eaglemk2" "f450" "f550" "m600" "t650" "eagle" "naki")
 
-cd ~/workspace/src/ros_packages_interns/controllers_brubotics/config
+cd ~/workspace/src/Droneswarm/controllers_brubotics/config
 
 for rtype in ${run_type_list[@]};do
   mkdir -p $rtype
