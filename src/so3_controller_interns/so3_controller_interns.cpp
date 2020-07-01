@@ -395,7 +395,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
   }
 
   // | -------------------- calculate the dt -------------------- |
-  ROS_INFO("It worked!!");
+  ROS_INFO("Using the so3 controller from the brubotics_controllers package");
   double dt;
 
   if (first_iteration_) {
