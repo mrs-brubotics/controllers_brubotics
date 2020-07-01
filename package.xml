@@ -19,6 +19,7 @@
   <depend>cmake_modules</depend>
   <depend>mrs_msgs</depend>
   <depend>mrs_uav_managers</depend>
+  <depend>mrs_uav_controllers</depend>
   <depend>dynamic_reconfigure</depend>
   <depend>mrs_lib</depend>
 

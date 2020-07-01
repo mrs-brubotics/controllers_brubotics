@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_msgs
   dynamic_reconfigure
   mrs_uav_managers
+  mrs_uav_controllers
   mrs_lib
   tf
   )
@@ -33,7 +34,7 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES MpcControllerCvxgen
-  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_managers mrs_lib tf
+  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_managers mrs_lib tf mrs_uav_controllers
   DEPENDS Eigen
   )
 
