@@ -1,5 +1,5 @@
 <launch>
-  
+  <--! Parameter definition >
   <arg name="RUN_TYPE" default="$(env RUN_TYPE)" />
   <arg name="UAV_TYPE" default="$(env UAV_TYPE)" />
   <arg name="custom_config_so3_controller_interns" default="" />
