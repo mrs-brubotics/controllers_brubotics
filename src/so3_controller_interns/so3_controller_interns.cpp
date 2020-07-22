@@ -50,6 +50,8 @@ public:
 
   void resetDisturbanceEstimators(void);
 
+  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints);
+
 private:
   std::string _version_;
 
@@ -1144,6 +1146,18 @@ void So3ControllerInterns::resetDisturbanceEstimators(void) {
 
   Iw_w_ = Eigen::Vector2d::Zero(2);
   Ib_b_ = Eigen::Vector2d::Zero(2);
+}
+
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr So3ControllerInterns::setConstraints([
+    [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
+
+  ROS_INFO("[So3Controller]: updating constraints");
+
+  mrs_msgs::DynamicsConstraintsSrvResponse res;
+  res.success = true;
+  res.message = "constraints updated";
+
+  return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse(res));
 }
 
 //}
