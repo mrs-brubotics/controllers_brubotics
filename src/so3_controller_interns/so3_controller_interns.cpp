@@ -7,7 +7,7 @@
 #include <mrs_uav_managers/controller.h>
 
 #include <dynamic_reconfigure/server.h>
-#include <controllers_brubotics/so3_controller_internsConfig.h>
+#include <mrs_uav_controllers/se3_controllerConfig.h>
 
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
@@ -17,6 +17,8 @@
 #include <mrs_lib/attitude_converter.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
+// custom publisher
+#include <std_msgs/Float64.h>
 
 //}
 
@@ -24,8 +26,8 @@
 #define Y 1
 #define Z 2
 
-#define OUTPUT_ATTITUDE_RATE 1
-#define OUTPUT_ATTITUDE_QUATERNION 2
+#define OUTPUT_ATTITUDE_RATE 0
+#define OUTPUT_ATTITUDE_QUATERNION 1
 
 namespace mrs_uav_controllers
 {
@@ -50,7 +52,7 @@ public:
 
   void resetDisturbanceEstimators(void);
 
-  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr &constraints);
+  const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
 
 private:
   std::string _version_;
@@ -68,11 +70,17 @@ private:
   // | --------------- dynamic reconfigure server --------------- |
 
   boost::recursive_mutex                            mutex_drs_;
-  typedef controllers_brubotics::so3_controller_internsConfig DrsConfig_t;
+  typedef mrs_uav_controllers::se3_controllerConfig DrsConfig_t;
   typedef dynamic_reconfigure::Server<DrsConfig_t>  Drs_t;
   boost::shared_ptr<Drs_t>                          drs_;
-  void                                              callbackDrs(controllers_brubotics::so3_controller_internsConfig& config, uint32_t level);
-  DrsConfig_t                                       drs_gains_;
+  void                                              callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, uint32_t level);
+  DrsConfig_t                                       drs_params_;
+
+  // | ----------------------- constraints ---------------------- |
+
+  mrs_msgs::DynamicsConstraints constraints_;
+  std::mutex                    mutex_constraints_;
+  bool                          got_constraints_ = false;
 
   // | ---------- thrust generation and mass estimation --------- |
 
@@ -100,6 +108,12 @@ private:
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
+// custom publisher
+  ros::Publisher custom_publisher_projected_thrust;
+  ros::Publisher custom_publisher_thrust;
+  ros::NodeHandle                                    nh_;
+  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers;
+
   // | ----------------------- gain muting ---------------------- |
 
   bool   gains_muted_ = false;  // the current state (may be initialized in activate())
@@ -116,8 +130,6 @@ private:
 
   // | ------------ controller limits and saturations ----------- |
 
-  double _attitude_rate_saturation_;
-  double _tilt_angle_saturation_;
   double _tilt_angle_failsafe_;
   double _thrust_saturation_;
 
@@ -129,7 +141,9 @@ private:
   ros::Time last_update_time_;
   bool      first_iteration_ = true;
 
-  int        output_mode_;  // 1 = ATTITUDE RATES, 2 = ATTITUDE QUATERNION
+  // | ----------------------- output mode ---------------------- |
+
+  int        output_mode_;  // attitude_rate / acceleration
   std::mutex mutex_output_mode_;
 
   // | ------------------------ profiler_ ------------------------ |
@@ -137,7 +151,7 @@ private:
   mrs_lib::Profiler profiler_;
   bool              _profiler_enabled_ = false;
 
-  // | ------------------------ integrals ----------------------- |
+  // | ------------------------ iparasitic_heading_ratentegrals ----------------------- |
 
   Eigen::Vector2d Ib_b_;  // body error integral in the body frame
   Eigen::Vector2d Iw_w_;  // world error integral in the world_frame
@@ -222,8 +236,6 @@ void So3ControllerInterns::initialize(const ros::NodeHandle& parent_nh, [[maybe_
   param_loader.loadParam("default_gains/horizontal/kib_lim", kibxy_lim_);
 
   // constraints
-  param_loader.loadParam("constraints/attitude_rate_saturation", _attitude_rate_saturation_);
-  param_loader.loadParam("constraints/tilt_angle_saturation", _tilt_angle_saturation_);
   param_loader.loadParam("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
 
@@ -237,6 +249,12 @@ void So3ControllerInterns::initialize(const ros::NodeHandle& parent_nh, [[maybe_
   // output mode
   param_loader.loadParam("output_mode", output_mode_);
 
+  param_loader.loadParam("rotation_matrix", drs_params_.rotation_type);
+
+  // angular rate feed forward
+  param_loader.loadParam("angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
+  param_loader.loadParam("angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
+
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[So3ControllerInterns]: could not load all parameters!");
     ros::shutdown();
@@ -245,44 +263,43 @@ void So3ControllerInterns::initialize(const ros::NodeHandle& parent_nh, [[maybe_
   // | ---------------- prepare stuff from params --------------- |
 
   if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
-    ROS_ERROR("[So3ControllerInterns]: output mode has to be {1, 2}!");
+    ROS_ERROR("[So3ControllerInterns]: output mode has to be {0, 1}!");
     ros::shutdown();
   }
 
   // convert to radians
-  _tilt_angle_saturation_ = (_tilt_angle_saturation_ / 180.0) * M_PI;
-  _tilt_angle_failsafe_   = (_tilt_angle_failsafe_ / 180.0) * M_PI;
-
-  // if _attitude_rate_saturation_ is 0 (or close), set it to something very high, so its inactive
-  if (_attitude_rate_saturation_ <= 1e-3) {
-    _attitude_rate_saturation_ = std::numeric_limits<double>::max();
-  }
+  _tilt_angle_failsafe_ = (_tilt_angle_failsafe_ / 180.0) * M_PI;
 
   // initialize the integrals
   uav_mass_difference_ = 0;
   Iw_w_                = Eigen::Vector2d::Zero(2);
   Ib_b_                = Eigen::Vector2d::Zero(2);
 
+// custom publisher
+   custom_publisher_projected_thrust = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
+  custom_publisher_thrust                    = nh_.advertise<std_msgs::Float64>("custom_thrust",1);
+
   // | --------------- dynamic reconfigure server --------------- |
 
-  drs_gains_.kpxy        = kpxy_;
-  drs_gains_.kvxy        = kvxy_;
-  drs_gains_.kaxy        = kaxy_;
-  drs_gains_.kiwxy       = kiwxy_;
-  drs_gains_.kibxy       = kibxy_;
-  drs_gains_.kpz         = kpz_;
-  drs_gains_.kvz         = kvz_;
-  drs_gains_.kaz         = kaz_;
-  drs_gains_.kqxy        = kqxy_;
-  drs_gains_.kqz         = kqz_;
-  drs_gains_.kiwxy_lim   = kiwxy_lim_;
-  drs_gains_.kibxy_lim   = kibxy_lim_;
-  drs_gains_.km          = km_;
-  drs_gains_.km_lim      = km_lim_;
-  drs_gains_.output_mode = output_mode_;
+  drs_params_.kpxy             = kpxy_;
+  drs_params_.kvxy             = kvxy_;
+  drs_params_.kaxy             = kaxy_;
+  drs_params_.kiwxy            = kiwxy_;
+  drs_params_.kibxy            = kibxy_;
+  drs_params_.kpz              = kpz_;
+  drs_params_.kvz              = kvz_;
+  drs_params_.kaz              = kaz_;
+  drs_params_.kqxy             = kqxy_;
+  drs_params_.kqz              = kqz_;
+  drs_params_.kiwxy_lim        = kiwxy_lim_;
+  drs_params_.kibxy_lim        = kibxy_lim_;
+  drs_params_.km               = km_;
+  drs_params_.km_lim           = km_lim_;
+  drs_params_.output_mode      = output_mode_;
+  drs_params_.jerk_feedforward = true;
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
-  drs_->updateConfig(drs_gains_);
+  drs_->updateConfig(drs_params_);
   Drs_t::CallbackType f = boost::bind(&So3ControllerInterns::callbackDrs, this, _1, _2);
   drs_->setCallback(f);
 
@@ -392,12 +409,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
     uav_state_ = *uav_state;
   }
 
+  auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
+
   if (!is_active_) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
   // | -------------------- calculate the dt -------------------- |
-  ROS_INFO("Using the so3 controller from the brubotics_controllers package");
+
   double dt;
 
   if (first_iteration_) {
@@ -490,14 +509,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
     Ra << control_reference->acceleration.x, control_reference->acceleration.y, control_reference->acceleration.z;
   } else {
     Ra << 0, 0, 0;
-  }
-
-  if (control_reference->use_attitude_rate) {
-    Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
-  } else if (control_reference->use_heading_rate) {
-    // to fill in the desired yaw rate (as the last degree of freedom), we need the desired orientation and the current desired roll and pitch rate
-    double desired_yaw_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(control_reference->heading_rate);
-    Rw << 0, 0, desired_yaw_rate;
   }
 
   // Op - position in global frame
@@ -624,7 +635,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
     integral_feedback << Ib_w[0] + Iw_w_[0], Ib_w[1] + Iw_w_[1], 0;
   }
 
-  Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward;
+ // Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward;
+  Eigen::Vector3d f = position_feedback + velocity_feedback + feed_forward;
 
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
@@ -670,10 +682,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
   }
 
   // saturate the angle
-  if (_tilt_angle_saturation_ > 1e-3 && theta > _tilt_angle_saturation_) {
+
+  auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+
+  if (theta > constraints.tilt) {
     ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta / M_PI) * 180.0,
-                      (_tilt_angle_saturation_ / M_PI) * 180.0);
-    theta = _tilt_angle_saturation_;
+                      (constraints.tilt / M_PI) * 180.0);
+    theta = constraints.tilt;
   }
 
   // reconstruct the vector
@@ -706,10 +721,47 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
     }
 
     // fill in the desired orientation based on the state feedback
-    Rd.col(2) = f_norm;
-    Rd.col(1) = Rd.col(2).cross(bxd);
-    Rd.col(1).normalize();
-    Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+    if (drs_params.rotation_type == 0) {
+
+      Rd.col(2) = f_norm;
+      Rd.col(1) = Rd.col(2).cross(bxd);
+      Rd.col(1).normalize();
+      Rd.col(0) = Rd.col(1).cross(Rd.col(2));
+      Rd.col(0).normalize();
+
+    } else {
+
+      // | ------------------------- body z ------------------------- |
+      Rd.col(2) = f_norm;
+
+      // | ------------------------- body x ------------------------- |
+
+      // construct the oblique projection
+      Eigen::Matrix3d projector_body_z_compl = (Eigen::Matrix3d::Identity(3, 3) - f_norm * f_norm.transpose());
+
+      // create a basis of the body-z complement subspace
+      Eigen::MatrixXd A = Eigen::MatrixXd(3, 2);
+      A.col(0)          = projector_body_z_compl.col(0);
+      A.col(1)          = projector_body_z_compl.col(1);
+
+      // create the basis of the projection null-space complement
+      Eigen::MatrixXd B = Eigen::MatrixXd(3, 2);
+      B.col(0)          = Eigen::Vector3d(1, 0, 0);
+      B.col(1)          = Eigen::Vector3d(0, 1, 0);
+
+      // oblique projector to <range_basis>
+      Eigen::MatrixXd Bt_A               = B.transpose() * A;
+      Eigen::MatrixXd Bt_A_pseudoinverse = ((Bt_A.transpose() * Bt_A).inverse()) * Bt_A.transpose();
+      Eigen::MatrixXd oblique_projector  = A * Bt_A_pseudoinverse * B.transpose();
+
+      Rd.col(0) = oblique_projector * bxd;
+      Rd.col(0).normalize();
+
+      // | ------------------------- body y ------------------------- |
+
+      Rd.col(1) = Rd.col(2).cross(Rd.col(0));
+      Rd.col(1).normalize();
+    }
   }
 
   // --------------------------------------------------------------
@@ -720,12 +772,22 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
   Eigen::Matrix3d E = 0.5 * (Rd.transpose() * R - R.transpose() * Rd);
 
   Eigen::Vector3d Eq;
-  Eq << (E(2, 1) - E(1, 2)) / 2.0, (E(0, 2) - E(2, 0)) / 2.0, (E(1, 0) - E(0, 1)) / 2.0;
+
+  // clang-format off
+  Eq << (E(2, 1) - E(1, 2)) / 2.0,
+        (E(0, 2) - E(2, 0)) / 2.0,
+        (E(1, 0) - E(0, 1)) / 2.0;
+  // clang-format on
 
   /* output */
   double thrust_force = f.dot(R.col(2));
 
   double thrust = 0;
+
+//custom publisher
+   custom_publisher_projected_thrust.publish(thrust_force);
+  double thrust_norm=sqrt(f(0,0)*f(0,0)+f(1,0)*f(1,0)+f(2,0)*f(2,0)); // norm of f ( not projected on the z axis of the UAV frame)
+  custom_publisher_thrust.publish(thrust_norm);
 
   if (thrust_force >= 0) {
     thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
@@ -753,8 +815,63 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
   // prepare the attitude feedback
   Eigen::Vector3d q_feedback = -Kq * Eq.array();
 
+  if (control_reference->use_attitude_rate) {
+    Rw << control_reference->attitude_rate.x, control_reference->attitude_rate.y, control_reference->attitude_rate.z;
+  } else if (control_reference->use_heading_rate) {
+
+    // to fill in the feed forward yaw rate
+    double desired_yaw_rate = 0;
+
+    try {
+      desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(control_reference->heading_rate);
+    }
+    catch (...) {
+      ROS_ERROR("[So3ControllerInterns]: exception caught while calculating the desired_yaw_rate feedforward");
+    }
+
+    Rw << 0, 0, desired_yaw_rate;
+  }
+
+  // feedforward angular acceleration
+  Eigen::Vector3d q_feedforward = Eigen::Vector3d(0, 0, 0);
+
+  if (drs_params.jerk_feedforward) {
+
+    Eigen::Matrix3d I;
+    I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
+    Eigen::Vector3d desired_jerk = Eigen::Vector3d(control_reference->jerk.x, control_reference->jerk.y, control_reference->jerk.z);
+    q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (thrust_force / total_mass);
+  }
+
   // angular feedback + angular rate feedforward
-  Eigen::Vector3d t = q_feedback + Rw;
+  Eigen::Vector3d t = q_feedback + Rw + q_feedforward;
+
+  // compensate for the parasitic heading rate created by the desired pitch and roll rate
+  Eigen::Vector3d rp_heading_rate_compensation = Eigen::Vector3d(0, 0, 0);
+
+  if (drs_params.pitch_roll_heading_rate_compensation) {
+
+    Eigen::Vector3d q_feedback_yawless = t;
+    q_feedback_yawless(2)              = 0;  // nullyfy the effect of the original yaw feedback
+
+    double parasitic_heading_rate = 0;
+
+    try {
+      parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
+    }
+    catch (...) {
+      ROS_ERROR("[So3ControllerInterns]: exception caught while calculating the parasitic heading rate!");
+    }
+
+    try {
+      rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
+    }
+    catch (...) {
+      ROS_ERROR("[So3ControllerInterns]: exception caught while calculating the parasitic heading rate compensation!");
+    }
+  }
+
+  t += rp_heading_rate_compensation;
 
   // --------------------------------------------------------------
   // |                      update parameters                     |
@@ -792,7 +909,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
     }
 
     if (kiwxy_lim_ >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: SO3's world X integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: SE3's world X integral is being saturated!");
     }
 
     // saturate the world Y
@@ -809,7 +926,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
     }
 
     if (kiwxy_lim_ >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: SO3's world Y integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: SE3's world Y integral is being saturated!");
     }
   }
 
@@ -889,7 +1006,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
     }
 
     if (kibxy_lim_ > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: SO3's body pitch integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: SE3's body pitch integral is being saturated!");
     }
 
     // saturate the body
@@ -906,7 +1023,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
     }
 
     if (kibxy_lim_ > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: SO3's body roll integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: SE3's body roll integral is being saturated!");
     }
   }
 
@@ -961,7 +1078,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
   {
 
     Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
-    Eigen::Vector3d thrust_vector = thrust_force * des_orientation.col(2);
+    Eigen::Vector3d thrust_vector   = thrust_force * des_orientation.col(2);
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
@@ -987,22 +1104,29 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
 
   // | --------------- saturate the attitude rate --------------- |
 
-  if (t[0] > _attitude_rate_saturation_) {
-    t[0] = _attitude_rate_saturation_;
-  } else if (t[0] < -_attitude_rate_saturation_) {
-    t[0] = -_attitude_rate_saturation_;
-  }
+  if (got_constraints_) {
 
-  if (t[1] > _attitude_rate_saturation_) {
-    t[1] = _attitude_rate_saturation_;
-  } else if (t[1] < -_attitude_rate_saturation_) {
-    t[1] = -_attitude_rate_saturation_;
-  }
+    auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
-  if (t[2] > _attitude_rate_saturation_) {
-    t[2] = _attitude_rate_saturation_;
-  } else if (t[2] < -_attitude_rate_saturation_) {
-    t[2] = -_attitude_rate_saturation_;
+    if (t[0] > constraints.roll_rate) {
+      t[0] = constraints.roll_rate;
+    } else if (t[0] < -constraints.roll_rate) {
+      t[0] = -constraints.roll_rate;
+    }
+
+    if (t[1] > constraints.pitch_rate) {
+      t[1] = constraints.pitch_rate;
+    } else if (t[1] < -constraints.pitch_rate) {
+      t[1] = -constraints.pitch_rate;
+    }
+
+    if (t[2] > constraints.yaw_rate) {
+      t[2] = constraints.yaw_rate;
+    } else if (t[2] < -constraints.yaw_rate) {
+      t[2] = -constraints.yaw_rate;
+    }
+  } else {
+    ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: missing dynamics constraints");
   }
 
   // | --------------- fill the resulting command --------------- |
@@ -1025,7 +1149,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr So3ControllerInterns::update(const mrs
 
     output_command->mode_mask = output_command->MODE_ATTITUDE;
 
-    ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: outputting attitude quaternion (this is not normal)");
+    ROS_WARN_THROTTLE(1.0, "[So3ControllerInterns]: outputting desired orientation (this is not normal)");
   }
 
   output_command->desired_acceleration.x = desired_x_accel;
@@ -1148,10 +1272,22 @@ void So3ControllerInterns::resetDisturbanceEstimators(void) {
   Ib_b_ = Eigen::Vector2d::Zero(2);
 }
 
+//}
+
+/* setConstraints() //{ */
+
 const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr So3ControllerInterns::setConstraints([
     [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
 
-  ROS_INFO("[So3Controller]: updating constraints");
+  if (!is_initialized_) {
+    return mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr(new mrs_msgs::DynamicsConstraintsSrvResponse());
+  }
+
+  mrs_lib::set_mutexed(mutex_constraints_, constraints->constraints, constraints_);
+
+  got_constraints_ = true;
+
+  ROS_INFO("[So3ControllerInterns]: updating constraints");
 
   mrs_msgs::DynamicsConstraintsSrvResponse res;
   res.success = true;
@@ -1168,12 +1304,12 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr So3ControllerInterns::s
 
 /* //{ callbackDrs() */
 
-void So3ControllerInterns::callbackDrs(controllers_brubotics::so3_controller_internsConfig& config, [[maybe_unused]] uint32_t level) {
+void So3ControllerInterns::callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, [[maybe_unused]] uint32_t level) {
 
   {
     std::scoped_lock lock(mutex_drs_params_, mutex_output_mode_);
 
-    drs_gains_ = config;
+    drs_params_ = config;
 
     output_mode_ = config.output_mode;
   }
@@ -1204,45 +1340,45 @@ void So3ControllerInterns::filterGains(const bool mute_gains, const double dt) {
 
     bool updated = false;
 
-    kpxy_  = calculateGainChange(dt, kpxy_, drs_gains_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
-    kvxy_  = calculateGainChange(dt, kvxy_, drs_gains_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
-    kaxy_  = calculateGainChange(dt, kaxy_, drs_gains_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
-    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_gains_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
-    kibxy_ = calculateGainChange(dt, kibxy_, drs_gains_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
-    kpz_   = calculateGainChange(dt, kpz_, drs_gains_.kpz * gain_coeff, bypass_filter, "kpz", updated);
-    kvz_   = calculateGainChange(dt, kvz_, drs_gains_.kvz * gain_coeff, bypass_filter, "kvz", updated);
-    kaz_   = calculateGainChange(dt, kaz_, drs_gains_.kaz * gain_coeff, bypass_filter, "kaz", updated);
-    kqxy_  = calculateGainChange(dt, kqxy_, drs_gains_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
-    kqz_   = calculateGainChange(dt, kqz_, drs_gains_.kqz * gain_coeff, bypass_filter, "kqz", updated);
-    km_    = calculateGainChange(dt, km_, drs_gains_.km * gain_coeff, bypass_filter, "km", updated);
+    kpxy_  = calculateGainChange(dt, kpxy_, drs_params_.kpxy * gain_coeff, bypass_filter, "kpxy", updated);
+    kvxy_  = calculateGainChange(dt, kvxy_, drs_params_.kvxy * gain_coeff, bypass_filter, "kvxy", updated);
+    kaxy_  = calculateGainChange(dt, kaxy_, drs_params_.kaxy * gain_coeff, bypass_filter, "kaxy", updated);
+    kiwxy_ = calculateGainChange(dt, kiwxy_, drs_params_.kiwxy * gain_coeff, bypass_filter, "kiwxy", updated);
+    kibxy_ = calculateGainChange(dt, kibxy_, drs_params_.kibxy * gain_coeff, bypass_filter, "kibxy", updated);
+    kpz_   = calculateGainChange(dt, kpz_, drs_params_.kpz * gain_coeff, bypass_filter, "kpz", updated);
+    kvz_   = calculateGainChange(dt, kvz_, drs_params_.kvz * gain_coeff, bypass_filter, "kvz", updated);
+    kaz_   = calculateGainChange(dt, kaz_, drs_params_.kaz * gain_coeff, bypass_filter, "kaz", updated);
+    kqxy_  = calculateGainChange(dt, kqxy_, drs_params_.kqxy * gain_coeff, bypass_filter, "kqxy", updated);
+    kqz_   = calculateGainChange(dt, kqz_, drs_params_.kqz * gain_coeff, bypass_filter, "kqz", updated);
+    km_    = calculateGainChange(dt, km_, drs_params_.km * gain_coeff, bypass_filter, "km", updated);
 
-    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_gains_.kiwxy_lim, false, "kiwxy_lim", updated);
-    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_gains_.kibxy_lim, false, "kibxy_lim", updated);
-    km_lim_    = calculateGainChange(dt, km_lim_, drs_gains_.km_lim, false, "km_lim", updated);
+    kiwxy_lim_ = calculateGainChange(dt, kiwxy_lim_, drs_params_.kiwxy_lim, false, "kiwxy_lim", updated);
+    kibxy_lim_ = calculateGainChange(dt, kibxy_lim_, drs_params_.kibxy_lim, false, "kibxy_lim", updated);
+    km_lim_    = calculateGainChange(dt, km_lim_, drs_params_.km_lim, false, "km_lim", updated);
 
     // set the gains back to dynamic reconfigure
     // and only do it when some filtering occurs
     if (updated) {
 
-      DrsConfig_t new_drs_gains;
+      DrsConfig_t new_drs_params = drs_params_;
 
-      new_drs_gains.kpxy        = kpxy_;
-      new_drs_gains.kvxy        = kvxy_;
-      new_drs_gains.kaxy        = kaxy_;
-      new_drs_gains.kiwxy       = kiwxy_;
-      new_drs_gains.kibxy       = kibxy_;
-      new_drs_gains.kpz         = kpz_;
-      new_drs_gains.kvz         = kvz_;
-      new_drs_gains.kaz         = kaz_;
-      new_drs_gains.kqxy        = kqxy_;
-      new_drs_gains.kqz         = kqz_;
-      new_drs_gains.kiwxy_lim   = kiwxy_lim_;
-      new_drs_gains.kibxy_lim   = kibxy_lim_;
-      new_drs_gains.km          = km_;
-      new_drs_gains.km_lim      = km_lim_;
-      new_drs_gains.output_mode = output_mode_;
+      new_drs_params.kpxy        = kpxy_;
+      new_drs_params.kvxy        = kvxy_;
+      new_drs_params.kaxy        = kaxy_;
+      new_drs_params.kiwxy       = kiwxy_;
+      new_drs_params.kibxy       = kibxy_;
+      new_drs_params.kpz         = kpz_;
+      new_drs_params.kvz         = kvz_;
+      new_drs_params.kaz         = kaz_;
+      new_drs_params.kqxy        = kqxy_;
+      new_drs_params.kqz         = kqz_;
+      new_drs_params.kiwxy_lim   = kiwxy_lim_;
+      new_drs_params.kibxy_lim   = kibxy_lim_;
+      new_drs_params.km          = km_;
+      new_drs_params.km_lim      = km_lim_;
+      new_drs_params.output_mode = output_mode_;
 
-      drs_->updateConfig(new_drs_gains);
+      drs_->updateConfig(new_drs_params);
     }
   }
 }
