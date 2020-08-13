@@ -17,7 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   )
 
 generate_dynamic_reconfigure_options(
-  cfg/so3_controller_interns.cfg
+  cfg/se3_controller_interns.cfg
   )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-diagnostics-color -Wall -Wextra")
@@ -48,19 +48,19 @@ include_directories(
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   )
 
-# SO3 controller
+# Se3 controller
 
-add_library(So3ControllerInterns
-  src/so3_controller_interns/so3_controller_interns.cpp
+add_library(Se3ControllerInterns
+  src/se3_controller_interns/se3_controller_interns.cpp
   )
 
-add_dependencies(So3ControllerInterns
+add_dependencies(Se3ControllerInterns
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
 
-target_link_libraries(So3ControllerInterns
+target_link_libraries(Se3ControllerInterns
   ${catkin_LIBRARIES}
   )
 
@@ -69,7 +69,7 @@ target_link_libraries(So3ControllerInterns
 #############
 
 install(TARGETS
-  So3ControllerInterns
+  Se3ControllerInterns
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

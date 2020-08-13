@@ -1,6 +1,6 @@
 So3ControllerInterns:
-  address: "controllers_brubotics/So3ControllerInterns"
-  namespace: "so3_controller_interns"
+  address: "controllers_brubotics/Se3ControllerInterns"
+  namespace: "se3_controller_interns"
   eland_threshold: 300 # [m], position error triggering eland
   failsafe_threshold: 300 # [m], position error triggering failsafe land
   odometry_innovation_threshold: 300 # [m], position odometry innovation threshold
