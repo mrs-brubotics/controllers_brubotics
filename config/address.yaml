@@ -1,4 +1,4 @@
-So3ControllerInterns:
+Se3ControllerBrubotics:
   address: "controllers_brubotics/Se3ControllerBrubotics"
   namespace: "se3_controller_brubotics"
   eland_threshold: 300 # [m], position error triggering eland
