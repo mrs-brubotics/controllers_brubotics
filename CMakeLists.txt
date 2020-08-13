@@ -17,7 +17,7 @@ find_package(catkin REQUIRED COMPONENTS
   )
 
 generate_dynamic_reconfigure_options(
-  cfg/se3_controller_interns.cfg
+  cfg/se3_controller_brubotics.cfg
   )
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -fno-diagnostics-color -Wall -Wextra")
@@ -50,17 +50,17 @@ include_directories(
 
 # Se3 controller
 
-add_library(Se3ControllerInterns
-  src/se3_controller_interns/se3_controller_interns.cpp
+add_library(Se3ControllerBrubotics
+  src/se3_controller_brubotics/se3_controller_brubotics.cpp
   )
 
-add_dependencies(Se3ControllerInterns
+add_dependencies(Se3ControllerBrubotics
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
 
-target_link_libraries(Se3ControllerInterns
+target_link_libraries(Se3ControllerBrubotics
   ${catkin_LIBRARIES}
   )
 
@@ -69,7 +69,7 @@ target_link_libraries(Se3ControllerInterns
 #############
 
 install(TARGETS
-  Se3ControllerInterns
+  Se3ControllerBrubotics
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
