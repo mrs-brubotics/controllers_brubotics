@@ -1,5 +1,5 @@
 <library path="lib/libSe3ControllerBrubotics">
-  <class name="controllers_brubotics/Se3ControllerBrubotis" type="mrs_uav_controllers::se3_controller_brubotics::Se3ControllerBrubotics" base_class_type="mrs_uav_managers::Controller">
+  <class name="controllers_brubotics/Se3ControllerBrubotics" type="mrs_uav_controllers::se3_controller_brubotics::Se3ControllerBrubotics" base_class_type="mrs_uav_managers::Controller">
     <description>This is Se3Controller as designed by the interns.</description>
   </class>
 </library>
