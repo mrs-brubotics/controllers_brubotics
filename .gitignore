@@ -1,0 +1,15 @@
+# ignore temp files
+*~
+
+# ignore vim temp files
+*.swp
+*.swo
+*.swn
+
+# ignore vscode temp files 
+*.vscode
+
+.gitman
+.gitman.old
+
+.tmuxinator.yml
