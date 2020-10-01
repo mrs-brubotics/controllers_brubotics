@@ -12,6 +12,7 @@
   <param name="$(env UAV_NAME)/control_manager/se3_controller_brubotics/enable_profiler" type="bool" value="$(arg PROFILER)" />
   <remap from="~$(env UAV_NAME)/control_manager/se3_controller_brubotics/profiler" to="profiler" />
 
+
   <!-- Address loading -->
   <rosparam ns="$(env UAV_NAME)/control_manager" file="$(find controllers_brubotics)/config/address.yaml" />
 

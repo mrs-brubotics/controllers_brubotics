@@ -64,6 +64,7 @@ target_link_libraries(Se3ControllerBrubotics
   ${catkin_LIBRARIES}
   )
 
+
 #############
 ## Install ##
 #############
@@ -74,6 +75,7 @@ install(TARGETS
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   )
+
 
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
