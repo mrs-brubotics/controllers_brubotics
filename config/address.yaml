@@ -1,8 +1,8 @@
 Se3ControllerBrubotics:
   address: "controllers_brubotics/Se3ControllerBrubotics"
   namespace: "se3_controller_brubotics"
-  eland_threshold: 300 # [m], position error triggering eland
-  failsafe_threshold: 300 # [m], position error triggering failsafe land
-  odometry_innovation_threshold: 300 # [m], position odometry innovation threshold
+  eland_threshold: 300 # 1.5 = original CTU value [m], position error triggering eland
+  failsafe_threshold: 300 # 2.5 = original CTU value [m], position error triggering failsafe land
+  odometry_innovation_threshold: 300 # 1.5 = original CTU value [m], position odometry innovation threshold
 
 

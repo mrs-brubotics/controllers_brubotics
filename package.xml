@@ -1,14 +1,17 @@
 <?xml version="1.0"?>
 <package format="2">
+
   <name>controllers_brubotics</name>
   <version>0.0.0</version>
   <description>The controllers_brubotics package</description>
 
-  <maintainer email="sofiacathairna@gmail.com">Sofia</maintainer>
+  <author email="bryan.convens@gmail.com">Bryan Convens</author>
+  <maintainer email="bryan.convens@gmail.com">Bryan Convens</maintainer>
 
-  <license>TODO</license>
+  <license>BSD 3-Clause</license>
 
   <buildtool_depend>catkin</buildtool_depend>
+
   <depend>pluginlib</depend>
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
@@ -23,9 +26,7 @@
   <depend>dynamic_reconfigure</depend>
   <depend>mrs_lib</depend>
 
-  <!-- The export tag contains other, unspecified, tags -->
   <export>
-    <!-- Other tools can request additional information be placed here -->
     <mrs_uav_managers plugin="${prefix}/plugins.xml" />
   </export>
 </package>
