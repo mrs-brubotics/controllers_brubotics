@@ -13,7 +13,7 @@
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
-#include <mrs_lib/geometry_utils.h>
+//#include <mrs_lib/geometry_utils.h>
 #include <mrs_lib/attitude_converter.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
