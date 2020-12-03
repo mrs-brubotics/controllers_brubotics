@@ -11,7 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_msgs
   dynamic_reconfigure
   mrs_uav_managers
-  mrs_uav_controllers
+  mrs_uav_controllers # additionally added by brubotics wrt ctu
   mrs_lib
   tf
   )
@@ -34,7 +34,7 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES MpcControllerCvxgen
-  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_managers mrs_lib tf mrs_uav_controllers
+  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_managers mrs_lib tf mrs_uav_controllers # mrs_uav_controllers additionally added by brubotics wrt ctu
   DEPENDS Eigen
   )
 
@@ -47,6 +47,37 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${dynamic_reconfigure_PACKAGE_PATH}/cmake/cfgbuild.cmake
   )
+#################################### this block (= copy of ctu) was initially not added by interns
+# Mpc Solver Library
+
+# Store in CMAKE_DEB_HOST_ARCH var the current build architecture
+execute_process(COMMAND
+  dpkg-architecture
+  -qDEB_HOST_ARCH
+  OUTPUT_VARIABLE
+  CMAKE_DEB_HOST_ARCH
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+
+# deduce the library path based on the system architecture
+if(${CMAKE_DEB_HOST_ARCH} MATCHES "armhf")
+  MESSAGE(FATAL_ERROR "Mising MpcControllerSolver.so for armhf")
+elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "i386")
+  MESSAGE(FATAL_ERROR "Mising MpcControllerSolver.so for i386")
+elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "x64")
+  set(MPC_CONTROLLER_SOLVER_BIN ${PROJECT_SOURCE_DIR}/lib/MpcControllerSolver/x64/libMpcControllerSolver.so)
+elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "amd64")
+  set(MPC_CONTROLLER_SOLVER_BIN ${PROJECT_SOURCE_DIR}/lib/MpcControllerSolver/x64/libMpcControllerSolver.so)
+elseif(${CMAKE_DEB_HOST_ARCH} MATCHES "arm64")
+  set(MPC_CONTROLLER_SOLVER_BIN ${PROJECT_SOURCE_DIR}/lib/MpcControllerSolver/arm64/libMpcControllerSolver.so)
+else()
+  MESSAGE(FATAL_ERROR ${CMAKE_DEB_HOST_ARCH})
+  MESSAGE(FATAL_ERROR "MpcControllerSolver.so has not been selected, check CMakeLists.txt.")
+endif()
+
+
+####################################
+
 
 # Se3 controller
 
