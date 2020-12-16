@@ -109,8 +109,12 @@ private:
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
 // custom publisher
-  ros::Publisher custom_publisher_projected_thrust;
-  ros::Publisher custom_publisher_thrust;
+  ros::Publisher custom_publisher_projected_thrust_;
+  ros::Publisher custom_publisher_thrust_;
+  ros::Publisher pub_thrust_satlimit_;
+  ros::Publisher pub_thrust_satlimit_physical_;
+  ros::Publisher pub_thrust_satval_;
+  ros::Publisher pub_hover_thrust_;
   ros::NodeHandle                                    nh_;
   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers;
 
@@ -276,8 +280,12 @@ void Se3ControllerBrubotics::initialize(const ros::NodeHandle& parent_nh, [[mayb
   Ib_b_                = Eigen::Vector2d::Zero(2);
 
 // custom publisher
-   custom_publisher_projected_thrust = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
-  custom_publisher_thrust                    = nh_.advertise<std_msgs::Float64>("custom_thrust",1);
+  custom_publisher_projected_thrust_ = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
+  custom_publisher_thrust_           = nh_.advertise<std_msgs::Float64>("custom_thrust",1);
+  pub_thrust_satlimit_physical_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit_physical",1);
+  pub_thrust_satlimit_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit",1);
+  pub_thrust_satval_           = nh_.advertise<std_msgs::Float64>("thrust_satval",1);
+  pub_hover_thrust_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
 
   // | --------------- dynamic reconfigure server --------------- |
 
@@ -635,8 +643,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
     integral_feedback << Ib_w[0] + Iw_w_[0], Ib_w[1] + Iw_w_[1], 0;
   }
 
- // Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward;
-  Eigen::Vector3d f = position_feedback + velocity_feedback + feed_forward;
+  // Do you want integral feedback?
+  //Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward; /// yes (original)
+  //Eigen::Vector3d f = position_feedback + velocity_feedback + feed_forward; /// no
+  // Eigen::Vector3d f = position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, _g_));// custom 1
+  Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, _g_));// custom 2
 
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
@@ -784,10 +795,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
 
   double thrust = 0;
 
-//custom publisher
-   custom_publisher_projected_thrust.publish(thrust_force);
+  //custom publisher
+  custom_publisher_projected_thrust_.publish(thrust_force);
   double thrust_norm=sqrt(f(0,0)*f(0,0)+f(1,0)*f(1,0)+f(2,0)*f(2,0)); // norm of f ( not projected on the z axis of the UAV frame)
-  custom_publisher_thrust.publish(thrust_norm);
+  custom_publisher_thrust_.publish(thrust_norm);
+  // print _motor_params_.A and _motor_params_.B
+  ROS_INFO_STREAM("_motor_params_.A = \n" << _motor_params_.A);
+  ROS_INFO_STREAM("_motor_params_.B = \n" << _motor_params_.B);
+  ROS_INFO_STREAM("_thrust_saturation_ = \n" << _thrust_saturation_);
+  double thrust_saturation_physical = pow((_thrust_saturation_-_motor_params_.B)/_motor_params_.A, 2);
+  ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
+  double hover_thrust = total_mass*_g_;
+  // publish these so you have them in matlab
+  pub_thrust_satlimit_physical_.publish(thrust_saturation_physical);
+  pub_thrust_satlimit_.publish(_thrust_saturation_);
+  pub_hover_thrust_.publish(hover_thrust);
 
   if (thrust_force >= 0) {
     thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
@@ -811,6 +833,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
     thrust = 0.0;
     ROS_WARN_THROTTLE(1.0, "[Se3ControllerBrubotics]: saturating thrust to 0");
   }
+
+  double thrust_physical_saturated = pow((thrust-_motor_params_.B)/_motor_params_.A, 2);
+  pub_thrust_satval_.publish(thrust_physical_saturated);
 
   // prepare the attitude feedback
   Eigen::Vector3d q_feedback = -Kq * Eq.array();
