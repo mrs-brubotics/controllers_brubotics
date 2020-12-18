@@ -7,8 +7,8 @@ default_gains:
 
   # influences pitching and rolling
   horizontal:
-    kp: 3.0
-    kv: 2.0
+    kp: 15.0 #60 #30 #20 #15.0 #3.0 #13.0 #3.0
+    kv: 8.0 #35 #17 #12 #8.0 #2.0 # 5.0 #2.0
     ka: 1.0
 
     attitude:
@@ -35,7 +35,7 @@ default_gains:
 
 # gains can be muted by the tracker by this factor
 # gains are also muting just after activation
-gain_mute_coefficient: 0.5
+gain_mute_coefficient: 1.0 #0.5
 
 constraints:
 

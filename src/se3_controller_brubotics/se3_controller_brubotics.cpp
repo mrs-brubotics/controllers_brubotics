@@ -600,8 +600,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
     Kq << kqxy_, kqxy_, kqz_;
   }
 
+  uav_mass_difference_ = 0; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
+
+    // a print to test if the gains change so you know where to change:
+  ROS_INFO_STREAM("Se3ControllerBrubotics: Kp = \n" << Kp);
+  ROS_INFO_STREAM("Se3ControllerBrubotics: Kv = \n" << Kv);
+  ROS_INFO_STREAM("Se3ControllerBrubotics: Ka = \n" << Ka);
+  ROS_INFO_STREAM("Se3ControllerBrubotics: Kq = \n" << Kq);
 
   // | --------------- desired orientation matrix --------------- |
 
@@ -648,6 +655,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
   //Eigen::Vector3d f = position_feedback + velocity_feedback + feed_forward; /// no
   // Eigen::Vector3d f = position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, _g_));// custom 1
   Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, _g_));// custom 2
+  // also check line above uav_mass_difference_ = 0!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
@@ -805,7 +813,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
   ROS_INFO_STREAM("_thrust_saturation_ = \n" << _thrust_saturation_);
   double thrust_saturation_physical = pow((_thrust_saturation_-_motor_params_.B)/_motor_params_.A, 2);
   ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
-  double hover_thrust = total_mass*_g_;
+  // double hover_thrust = total_mass*_g_; use this as most correct if total_mass used in control
+  double hover_thrust = _uav_mass_*_g_;
   // publish these so you have them in matlab
   pub_thrust_satlimit_physical_.publish(thrust_saturation_physical);
   pub_thrust_satlimit_.publish(_thrust_saturation_);
