@@ -605,10 +605,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
 
     // a print to test if the gains change so you know where to change:
-  ROS_INFO_STREAM("Se3ControllerBrubotics: Kp = \n" << Kp);
-  ROS_INFO_STREAM("Se3ControllerBrubotics: Kv = \n" << Kv);
-  ROS_INFO_STREAM("Se3ControllerBrubotics: Ka = \n" << Ka);
-  ROS_INFO_STREAM("Se3ControllerBrubotics: Kq = \n" << Kq);
+  // ROS_INFO_STREAM("Se3ControllerBrubotics: Kp = \n" << Kp);
+  // ROS_INFO_STREAM("Se3ControllerBrubotics: Kv = \n" << Kv);
+  // ROS_INFO_STREAM("Se3ControllerBrubotics: Ka = \n" << Ka);
+  // ROS_INFO_STREAM("Se3ControllerBrubotics: Kq = \n" << Kq);
 
   // | --------------- desired orientation matrix --------------- |
 
@@ -655,6 +655,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
   //Eigen::Vector3d f = position_feedback + velocity_feedback + feed_forward; /// no
   // Eigen::Vector3d f = position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, _g_));// custom 1
   Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, _g_));// custom 2
+  //ROS_INFO_STREAM("Se3ControllerBrubotics: _g_ + or -?= \n" << _g_);
   // also check line above uav_mass_difference_ = 0!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   // | ----------- limiting the downwards acceleration ---------- |
@@ -808,11 +809,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
   double thrust_norm=sqrt(f(0,0)*f(0,0)+f(1,0)*f(1,0)+f(2,0)*f(2,0)); // norm of f ( not projected on the z axis of the UAV frame)
   custom_publisher_thrust_.publish(thrust_norm);
   // print _motor_params_.A and _motor_params_.B
-  ROS_INFO_STREAM("_motor_params_.A = \n" << _motor_params_.A);
-  ROS_INFO_STREAM("_motor_params_.B = \n" << _motor_params_.B);
-  ROS_INFO_STREAM("_thrust_saturation_ = \n" << _thrust_saturation_);
+  // ROS_INFO_STREAM("_motor_params_.A = \n" << _motor_params_.A);
+  // ROS_INFO_STREAM("_motor_params_.B = \n" << _motor_params_.B);
+  // ROS_INFO_STREAM("_thrust_saturation_ = \n" << _thrust_saturation_);
   double thrust_saturation_physical = pow((_thrust_saturation_-_motor_params_.B)/_motor_params_.A, 2);
-  ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
+  // ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
   // double hover_thrust = total_mass*_g_; use this as most correct if total_mass used in control
   double hover_thrust = _uav_mass_*_g_;
   // publish these so you have them in matlab
@@ -1110,9 +1111,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
   double desired_z_accel = 0;
 
   {
-
+    Eigen::Matrix3d des_orientation_bryan = Rd;
     Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
     Eigen::Vector3d thrust_vector   = thrust_force * des_orientation.col(2);
+    // ROS_INFO_STREAM("Rd = \n" << Rd);
+    // ROS_INFO_STREAM("des_orientation = \n" << des_orientation);
+    // ROS_INFO_STREAM("des_orientation_bryan = \n" << des_orientation_bryan);
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
@@ -1135,6 +1139,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
       desired_z_accel = res.value().vector.z;
     }
   }
+
+
+
+  // BRYAN: cancel terms for minimal controller
+  t = q_feedback;// + Rw + q_feedforward;
+
 
   // | --------------- saturate the attitude rate --------------- |
 
