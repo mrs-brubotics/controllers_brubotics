@@ -13,7 +13,6 @@
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
 #include <mrs_lib/mutex.h>
-//#include <mrs_lib/geometry_utils.h>
 #include <mrs_lib/attitude_converter.h>
 
 #include <geometry_msgs/Vector3Stamped.h>
@@ -21,10 +20,6 @@
 #include <std_msgs/Float64.h>
 
 //}
-
-#define X 0
-#define Y 1
-#define Z 2
 
 #define OUTPUT_ATTITUDE_RATE 0
 #define OUTPUT_ATTITUDE_QUATERNION 1
@@ -40,8 +35,8 @@ namespace se3_controller_brubotics
 class Se3ControllerBrubotics : public mrs_uav_managers::Controller {
 
 public:
-  void initialize(const ros::NodeHandle& parent_nh, const std::string name, const std::string name_space, const mrs_uav_managers::MotorParams motor_params,
-                  const double uav_mass, const double g, std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
+  void initialize(const ros::NodeHandle& parent_nh, const std::string name, const std::string name_space, const double uav_mass,
+                  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers);
   bool activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_attitude_cmd);
   void deactivate(void);
 
@@ -86,8 +81,6 @@ private:
 
   double                        _uav_mass_;
   double                        uav_mass_difference_;
-  double                        _g_;
-  mrs_uav_managers::MotorParams _motor_params_;
 
   // gains that are used and already filtered
   double kpxy_;       // position xy gain
@@ -182,16 +175,13 @@ private:
 
 /* //{ initialize() */
 
-void Se3ControllerBrubotics::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space,
-                               const mrs_uav_managers::MotorParams motor_params, const double uav_mass, const double g,
+void Se3ControllerBrubotics::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space, const double uav_mass,
                                std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
 
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
-  _motor_params_   = motor_params;
   _uav_mass_       = uav_mass;
-  _g_              = g;
 
   ros::Time::waitForValid();
 
@@ -358,7 +348,8 @@ bool Se3ControllerBrubotics::activate(const mrs_msgs::AttitudeCommand::ConstPtr&
   // rampup check
   if (_rampup_enabled_) {
 
-    double hover_thrust      = sqrt(last_attitude_cmd->total_mass * _g_) * _motor_params_.A + _motor_params_.B;
+    // OLD double hover_thrust      = sqrt(last_attitude_cmd->total_mass * _g_) * _motor_params_.A + _motor_params_.B;
+    double hover_thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, last_attitude_cmd->total_mass * common_handlers_->g);
     double thrust_difference = hover_thrust - last_attitude_cmd->thrust;
 
     if (thrust_difference > 0) {
@@ -640,7 +631,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
 
   double total_mass = _uav_mass_ + uav_mass_difference_;
 
-  Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, _g_) + Ra);
+  // Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, _g_) + Ra);
+  Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g) + Ra);
   Eigen::Vector3d position_feedback = -Kp * Ep.array();
   Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
   Eigen::Vector3d integral_feedback;
@@ -654,7 +646,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
   //Eigen::Vector3d f = position_feedback + velocity_feedback + integral_feedback + feed_forward; /// yes (original)
   //Eigen::Vector3d f = position_feedback + velocity_feedback + feed_forward; /// no
   // Eigen::Vector3d f = position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, _g_));// custom 1
-  Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, _g_));// custom 2
+  // OLD Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, _g_));// custom 2
+  Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, common_handlers_->g));// custom 2
   //ROS_INFO_STREAM("Se3ControllerBrubotics: _g_ + or -?= \n" << _g_);
   // also check line above uav_mass_difference_ = 0!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -726,7 +719,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
     Rd = mrs_lib::AttitudeConverter(control_reference->orientation);
 
     if (control_reference->use_heading) {
-      Rd = mrs_lib::AttitudeConverter(Rd).setHeading(control_reference->heading);
+      try {
+        Rd = mrs_lib::AttitudeConverter(Rd).setHeading(control_reference->heading);
+      }
+      catch (...) {
+        ROS_ERROR("[Se3ControllerBrubotics]: could not set the desired heading");
+      }
     }
 
   } else {
@@ -812,17 +810,19 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
   // ROS_INFO_STREAM("_motor_params_.A = \n" << _motor_params_.A);
   // ROS_INFO_STREAM("_motor_params_.B = \n" << _motor_params_.B);
   // ROS_INFO_STREAM("_thrust_saturation_ = \n" << _thrust_saturation_);
-  double thrust_saturation_physical = pow((_thrust_saturation_-_motor_params_.B)/_motor_params_.A, 2);
+  // OLD double thrust_saturation_physical = pow((_thrust_saturation_-_motor_params_.B)/_motor_params_.A, 2);
+  double thrust_saturation_physical = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, _thrust_saturation_);
   // ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
   // double hover_thrust = total_mass*_g_; use this as most correct if total_mass used in control
-  double hover_thrust = _uav_mass_*_g_;
+  double hover_thrust = _uav_mass_*common_handlers_->g;
   // publish these so you have them in matlab
   pub_thrust_satlimit_physical_.publish(thrust_saturation_physical);
   pub_thrust_satlimit_.publish(_thrust_saturation_);
   pub_hover_thrust_.publish(hover_thrust);
 
   if (thrust_force >= 0) {
-    thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
+    // OLD thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
+    thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force);
   } else {
     ROS_WARN_THROTTLE(1.0, "[Se3ControllerBrubotics]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
   }
@@ -844,7 +844,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
     ROS_WARN_THROTTLE(1.0, "[Se3ControllerBrubotics]: saturating thrust to 0");
   }
 
-  double thrust_physical_saturated = pow((thrust-_motor_params_.B)/_motor_params_.A, 2);
+  // old double thrust_physical_saturated = pow((thrust-_motor_params_.B)/_motor_params_.A, 2);
+  double thrust_physical_saturated = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust);
   pub_thrust_satval_.publish(thrust_physical_saturated);
 
   // prepare the attitude feedback
@@ -1120,7 +1121,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
 
     double world_accel_x = (thrust_vector[0] / total_mass) - (Iw_w_[0] / total_mass) - (Ib_w[0] / total_mass);
     double world_accel_y = (thrust_vector[1] / total_mass) - (Iw_w_[1] / total_mass) - (Ib_w[1] / total_mass);
-    double world_accel_z = (thrust_vector[2] / total_mass) - _g_;
+    // double world_accel_z = (thrust_vector[2] / total_mass) - _g_;
+    double world_accel_z = (thrust_vector[2] / total_mass) - common_handlers_->g;
 
     geometry_msgs::Vector3Stamped world_accel;
 

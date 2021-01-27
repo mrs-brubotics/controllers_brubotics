@@ -1,0 +1,5 @@
+rampup:
+
+  enabled: true
+  speed: 0.5 # [1/s]
+
