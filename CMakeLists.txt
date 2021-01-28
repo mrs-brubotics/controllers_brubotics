@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   mrs_uav_controllers # additionally added by brubotics wrt ctu
   mrs_lib
   tf
+  rosbag
   )
 
 generate_dynamic_reconfigure_options(
@@ -34,7 +35,7 @@ set(Eigen_LIBRARIES ${Eigen_LIBRARIES})
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES MpcControllerCvxgen
-  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_managers mrs_lib tf mrs_uav_controllers # mrs_uav_controllers additionally added by brubotics wrt ctu
+  CATKIN_DEPENDS roscpp sensor_msgs std_msgs geometry_msgs mrs_msgs mrs_uav_managers mrs_lib tf mrs_uav_controllers rosbag# mrs_uav_controllers additionally added by brubotics wrt ctu
   DEPENDS Eigen
   )
 

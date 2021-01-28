@@ -25,6 +25,7 @@
   <depend>mrs_uav_controllers</depend>
   <depend>dynamic_reconfigure</depend>
   <depend>mrs_lib</depend>
+  <depend>rosbag</depend>
 
   <export>
     <mrs_uav_managers plugin="${prefix}/plugins.xml" />
