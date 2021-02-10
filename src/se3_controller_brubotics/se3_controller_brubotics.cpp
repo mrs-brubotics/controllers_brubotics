@@ -845,7 +845,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
   }
 
   // old double thrust_physical_saturated = pow((thrust-_motor_params_.B)/_motor_params_.A, 2);
-  double thrust_physical_saturated = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust);
+  double thrust_physical_saturated = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, thrust);
+  //ROS_INFO_STREAM("thrust_physical_saturated = \n" << thrust_physical_saturated);
   pub_thrust_satval_.publish(thrust_physical_saturated);
 
   // prepare the attitude feedback
