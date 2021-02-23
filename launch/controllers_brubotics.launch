@@ -4,6 +4,7 @@
   <arg name="UAV_TYPE" default="$(env UAV_TYPE)" />
   <arg name="custom_config_se3_controller_brubotics" default="" />
   <arg name="PROFILER" default="$(optenv PROFILER false)" />
+  <arg name="custom_config_se3_controller_brubotics_load" default="" />
 
   <!-- Parameter loading -->
   <rosparam ns="$(env UAV_NAME)/control_manager/se3_controller_brubotics" file="$(find controllers_brubotics)/config/default/se3_brubotics.yaml" />
@@ -12,6 +13,12 @@
   <param name="$(env UAV_NAME)/control_manager/se3_controller_brubotics/enable_profiler" type="bool" value="$(arg PROFILER)" />
   <remap from="~$(env UAV_NAME)/control_manager/se3_controller_brubotics/profiler" to="profiler" />
 
+  <rosparam ns="$(env UAV_NAME)/control_manager/se3_controller_brubotics_load" file="$(find controllers_brubotics)/config/default/se3_brubotics_load.yaml" />
+  <rosparam ns="$(env UAV_NAME)/control_manager/se3_controller_brubotics_load" file="$(find controllers_brubotics)/config/$(arg RUN_TYPE)/$(arg UAV_TYPE)/se3_brubotics_load.yaml" />
+  <rosparam if="$(eval not arg('custom_config_se3_controller_brubotics_load') == '')" ns="$(env UAV_NAME)/control_manager/se3_controller_brubotics_load" file="$(arg custom_config_se3_controller_brubotics_load)" />
+  <param name="$(env UAV_NAME)/control_manager/se3_controller_brubotics_load/enable_profiler" type="bool" value="$(arg PROFILER)" />
+  <remap from="~$(env UAV_NAME)/control_manager/se3_controller_brubotics_load/profiler" to="profiler" />
+  
 
   <!-- Address loading -->
   <rosparam ns="$(env UAV_NAME)/control_manager" file="$(find controllers_brubotics)/config/address.yaml" />

@@ -97,6 +97,23 @@ target_link_libraries(Se3ControllerBrubotics
   )
 
 
+  # Se3 controller with load
+
+add_library(Se3ControllerBruboticsLoad
+  src/se3_controller_brubotics_load/se3_controller_brubotics_load.cpp
+  )
+
+add_dependencies(Se3ControllerBruboticsLoad
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+  ${PROJECT_NAME}_gencfg
+  )
+
+target_link_libraries(Se3ControllerBruboticsLoad
+  ${catkin_LIBRARIES}
+  )
+
+
 #############
 ## Install ##
 #############
@@ -108,6 +125,12 @@ install(TARGETS
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
   )
 
+install(TARGETS
+  Se3ControllerBruboticsLoad
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )
 
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}

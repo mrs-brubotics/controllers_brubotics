@@ -3,3 +3,9 @@
     <description>This is Se3Controller as designed by the interns.</description>
   </class>
 </library>
+
+<library path="lib/libSe3ControllerBruboticsLoad">
+  <class name="controllers_brubotics/Se3ControllerBruboticsLoad" type="mrs_uav_controllers::se3_controller_brubotics_load::Se3ControllerBruboticsLoad" base_class_type="mrs_uav_managers::Controller">
+    <description>[SE3 controller designed for drone with payload]</description>
+  </class>
+</library>
