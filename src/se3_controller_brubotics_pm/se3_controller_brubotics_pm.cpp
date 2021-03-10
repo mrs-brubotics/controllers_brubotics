@@ -9,6 +9,12 @@
 #include <dynamic_reconfigure/server.h>
 #include <mrs_uav_controllers/se3_controllerConfig.h>
 
+//added by Aly
+//#include <mrs_lib/subscribe_handler.h>
+#include <gazebo_msgs/ModelStates.h>
+#include <geometry_msgs/Pose.h>
+//#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
@@ -110,6 +116,12 @@ private:
   ros::Publisher pub_hover_thrust_;
   ros::NodeHandle                                    nh_;
   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers;
+
+  //added by Aly
+  // | ----------------- custon subscriber ---------------- |
+  ros::Subscriber load_state_sub;
+  geometry_msgs::Pose pose;
+  void loadStatesCallback(const gazebo_msgs::ModelStatesConstPtr& msg);
 
   // | ----------------------- gain muting ---------------------- |
 
@@ -276,6 +288,7 @@ void Se3ControllerBruboticsPm::initialize(const ros::NodeHandle& parent_nh, [[ma
   pub_thrust_satlimit_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit",1);
   pub_thrust_satval_           = nh_.advertise<std_msgs::Float64>("thrust_satval",1);
   pub_hover_thrust_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
+
 
   // | --------------- dynamic reconfigure server --------------- |
 
@@ -448,8 +461,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     }
   }
 
-  // | ----------------- get the current heading ---------------- |
+  //added by Aly
+  // | ----------------- custon subscriber ---------------- |
+  
+  load_state_sub =  nh_.subscribe("/gazebo/model_states", 1, &Se3ControllerBruboticsPm::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
 
+  // | ----------------- get the current heading ---------------- |
   double uav_heading = 0;
 
   try {
@@ -1348,6 +1365,22 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3ControllerBruboticsP
 // --------------------------------------------------------------
 // |                          callbacks                         |
 // --------------------------------------------------------------
+
+//added by Aly
+// | ----------------- load subscribtion callback ---------------- |
+void Se3ControllerBruboticsPm::loadStatesCallback(const gazebo_msgs::ModelStatesConstPtr& msg) {
+  int load_index = -1;
+  std::vector<std::string> model_names = msg->name;
+
+  for(size_t i = 0; i < model_names.size(); i++)
+  {
+      if(model_names[i] == "bar")
+          load_index = i;
+  }
+  pose = msg->pose[load_index];
+  ROS_INFO_STREAM("Position:" << std::endl << pose);
+}
+
 
 /* //{ callbackDrs() */
 
