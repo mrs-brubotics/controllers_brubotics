@@ -126,7 +126,7 @@ private:
   double _gains_filter_min_change_rate_;
 
   // | ------------ controller limits and saturations ----------- |
-
+  bool _tilt_angle_failsafe_enabled_;
   double _tilt_angle_failsafe_;
   double _thrust_saturation_;
 
@@ -230,7 +230,12 @@ void Se3ControllerBrubotics::initialize(const ros::NodeHandle& parent_nh, [[mayb
   param_loader.loadParam("default_gains/horizontal/kib_lim", kibxy_lim_);
 
   // constraints
-  param_loader.loadParam("constraints/tilt_angle_failsafe", _tilt_angle_failsafe_);
+  param_loader.loadParam("constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
+  param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
+  if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
+    ROS_ERROR("[Se3ControllerBrubotics]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
+    ros::shutdown();
+  }
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
 
   // gain filtering
@@ -262,7 +267,7 @@ void Se3ControllerBrubotics::initialize(const ros::NodeHandle& parent_nh, [[mayb
   }
 
   // convert to radians
-  _tilt_angle_failsafe_ = (_tilt_angle_failsafe_ / 180.0) * M_PI;
+  //_tilt_angle_failsafe_ = (_tilt_angle_failsafe_ / 180.0) * M_PI;
 
   // initialize the integrals
   uav_mass_difference_ = 0;
@@ -678,7 +683,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  if (_tilt_angle_failsafe_ > 1e-3 && theta > _tilt_angle_failsafe_) {
+  if (_tilt_angle_failsafe_enabled_ && theta > _tilt_angle_failsafe_) {
 
     ROS_ERROR("[Se3ControllerBrubotics]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
               (180.0 / M_PI) * _tilt_angle_failsafe_);
@@ -698,7 +703,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBrubotics::update(const m
 
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
-  if (theta > constraints.tilt) {
+  if (fabs(constraints.tilt) > 1e-3 && theta > constraints.tilt) {
     ROS_WARN_THROTTLE(1.0, "[Se3ControllerBrubotics]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta / M_PI) * 180.0,
                       (constraints.tilt / M_PI) * 180.0);
     theta = constraints.tilt;
