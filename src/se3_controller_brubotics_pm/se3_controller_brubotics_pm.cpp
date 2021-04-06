@@ -18,6 +18,10 @@
 #include <mrs_msgs/BacaProtocol.h>
 #include <std_msgs/UInt8.h>
 
+// Raph
+#include <mrs_msgs/BacaProtocol.h>
+#include <std_msgs/UInt8.h>
+
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
@@ -27,6 +31,7 @@
 #include <geometry_msgs/Vector3Stamped.h>
 // custom publisher
 #include <std_msgs/Float64.h>
+
 
 //}
 
@@ -131,6 +136,12 @@ private:
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
   Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d load_pose_position = Eigen::Vector3d::Zero(3);
+
+  // Raph
+  ros::Subscriber data_payload_sub;
+  //Eigen::Array3d data_payload = Eigen::Array3d::Zero(3);
+  std::array<uint8_t, 3> data_payload;
+  void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
 
   // Raph
   ros::Subscriber data_payload_sub;
