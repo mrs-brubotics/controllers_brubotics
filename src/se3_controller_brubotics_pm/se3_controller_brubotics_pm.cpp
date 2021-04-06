@@ -10,11 +10,13 @@
 #include <mrs_uav_controllers/se3_controllerConfig.h>
 
 //added by Aly + Philippe 
-//#include <mrs_lib/subscribe_handler.h>
 #include <gazebo_msgs/LinkStates.h>
 #include <geometry_msgs/Pose.h>   // for the position
 #include <geometry_msgs/Twist.h> //for the velocity
-//#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+
+// Raph
+#include <mrs_msgs/BacaProtocol.h>
+#include <std_msgs/UInt8.h>
 
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
@@ -128,6 +130,13 @@ private:
   geometry_msgs::Twist load_velocity;
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
   Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d load_pose_position = Eigen::Vector3d::Zero(3);
+
+  // Raph
+  ros::Subscriber data_payload_sub;
+  //Eigen::Array3d data_payload = Eigen::Array3d::Zero(3);
+  std::array<uint8_t, 3> data_payload;
+  void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
 
   // | ----------------------- gain muting ---------------------- |
 
@@ -475,6 +484,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   
   load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsPm::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
   
+  //Raph
+  data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3ControllerBruboticsPm::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+
   // | ----------------- get the current heading ---------------- |
   double uav_heading = 0;
 
@@ -565,7 +577,50 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   // added by Aly + Philippe
-  // Load error
+  // --------------------------------------------------------------
+  // |          load the control reference and estimates          |
+  // --------------------------------------------------------------
+  // Rpl - position reference in global frame
+  // Rvl - velocity reference in global frame
+  Eigen::Vector3d Rpl = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Rvl = Eigen::Vector3d::Zero(3);
+
+  // Opl - position load in global frame
+  // Ovl - velocity load in global frame
+  Eigen::Vector3d Opl(load_pose_position[0], load_pose_position[1], load_pose_position[2]);
+  Eigen::Vector3d Ovl(load_lin_vel[0], load_lin_vel[1], load_lin_vel[2]);
+  double cable_length = 1.2;
+
+  if (control_reference->use_position_vertical || control_reference->use_position_horizontal) {
+
+    if (control_reference->use_position_horizontal) {
+      Rpl[0] = control_reference->position.x;
+      Rpl[1] = control_reference->position.y;
+    } 
+
+    if (control_reference->use_position_vertical) {
+      Rpl[2] = control_reference->position.z - cable_length;
+    } 
+  }
+
+  // | -------------- calculate the control errors -------------- |
+  // Load position control error
+  Eigen::Vector3d Epl = Eigen::Vector3d::Zero(3);
+
+  if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
+    Epl = Opl - Rpl;
+  }
+  //ROS_INFO_STREAM("Error Position load:" << std::endl << Opl);
+
+  // Load velocity control error
+  Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3);
+
+  if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
+      control_reference->use_position_vertical) {  // even wehn use_position_vertical to provide dampening
+    Evl = Ovl - Rv;
+  }
+
+  // 1e method pandolfo
   Eigen::Array3d  Klv = Eigen::Array3d::Zero(3); // Kv for the load
  
   if (control_reference->use_velocity_horizontal) {
@@ -581,6 +636,41 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   } 
   else {
     Klv[2] = 0;
+  }
+
+  // 2e method pandolfo
+  Eigen::Array3d  Kpl = Eigen::Array3d::Zero(3); 
+  Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
+ 
+  if (control_reference->use_velocity_horizontal) {
+      Kpl[0] = 1.5;
+      Kpl[1] = Kpl[0];
+  } else {
+      Kpl[0] = 0;
+      Kpl[1] = 0;
+  }
+
+  if (control_reference->use_velocity_vertical) {
+    Kpl[2] = 1.5;
+  } 
+  else {
+    Kpl[2] = 0;
+  }
+
+ 
+  if (control_reference->use_velocity_horizontal) {
+      Kdl[0] = 1.5;
+      Kdl[1] = Kdl[0];
+  } else {
+      Kdl[0] = 0;
+      Kdl[1] = 0;
+  }
+
+  if (control_reference->use_velocity_vertical) {
+    Kdl[2] = 1.5;
+  } 
+  else {
+    Kdl[2] = 0;
   }
 
   // | --------------------- load the gains --------------------- |
@@ -640,9 +730,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
   // added by Aly + Philippe
+  // 1e method pandolfo
   Klv = Klv *(_uav_mass_ + uav_mass_difference_);
+  //2e method pandolfo
+  Kpl = Kpl *(_uav_mass_ + uav_mass_difference_);;
+  Kdl = Kdl *(_uav_mass_ + uav_mass_difference_);;
 
-    // a print to test if the gains change so you know where to change:
+  // a print to test if the gains change so you know where to change:
   // ROS_INFO_STREAM("Se3ControllerBruboticsPm: Kp = \n" << Kp);
   // ROS_INFO_STREAM("Se3ControllerBruboticsPm: Kv = \n" << Kv);
   // ROS_INFO_STREAM("Se3ControllerBruboticsPm: Ka = \n" << Ka);
@@ -683,9 +777,26 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   Eigen::Vector3d position_feedback = -Kp * Ep.array();
   Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
   Eigen::Vector3d integral_feedback;
+
   //added by Aly + Philippe
-  Eigen::Vector3d velocity_load_feedback = -Klv * load_lin_vel.array();
+  //Eigen::Vector3d velocity_load_feedback = -Klv * load_lin_vel.array();
   //ROS_INFO_STREAM("Velocity feedback:" << std::endl << velocity_load_feedback);
+  for (int i = 0; i < 3; i++) // in order to set the error to 0 befor the load spawn
+  {
+    if(load_pose_position[i] > -0.1 && load_pose_position[i] < 0.1)
+    {
+      Epl = Epl*0;
+      Evl = Evl*0;
+    }
+  }
+  
+  
+  Eigen::Vector3d position_load_feedback = Kpl * Epl.array();
+  Eigen::Vector3d velocity_load_feedback = Kdl * Evl.array();
+  //ROS_INFO_STREAM("Position feedback:" << std::endl << position_load_feedback);
+
+  ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
+
   {
     std::scoped_lock lock(mutex_integrals_);
 
@@ -699,7 +810,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   // OLD Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, _g_));// custom 2
  
   // changed by Aly + Philippe
-  Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, common_handlers_->g));// custom 2 //add velocity_load_feedback if load transortation
+  Eigen::Vector3d f = position_load_feedback + velocity_load_feedback + position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g));// custom 2 //add velocity_load_feedback if load transortation
   //ROS_INFO_STREAM("Se3ControllerBruboticsPm: _g_ + or -?= \n" << _g_);
   // also check line above uav_mass_difference_ = 0!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -1417,18 +1528,49 @@ void Se3ControllerBruboticsPm::loadStatesCallback(const gazebo_msgs::LinkStatesC
   }
   
   load_pose = loadmsg->pose[load_index];
+  load_pose_position[0] = load_pose.position.x;
+  load_pose_position[1] = load_pose.position.y;
+  load_pose_position[2] = load_pose.position.z;
+
+  for (int i = 0; i < 3; i++) // to set it to zero when the load hasn't spawn yet
+  {
+      if (load_pose_position[i] > 1000)
+      {
+        load_pose_position[i] = 0;
+      } else {
+        load_pose_position[i] = load_pose_position[i];
+      }
+  }
 
   load_velocity = loadmsg->twist[load_index];
-
   custom_publisher_load_pose.publish(load_pose);
 
   load_lin_vel[0]= load_velocity.linear.x;
   load_lin_vel[1]= load_velocity.linear.y;
   load_lin_vel[2]= load_velocity.linear.z;
-  ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
-  //ROS_INFO_STREAM("Velocity:" << std::endl << load_lin_vel);
+  //ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
+  //ROS_INFO_STREAM("Position:" << std::endl << load_pose_position);
 }
 
+// Raph
+
+void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) {
+  int message_id;
+  int payload_1;
+  int payload_2;
+  message_id = msg->payload[0];
+  payload_1 = msg->payload[1];
+  payload_2 = msg->payload[2];
+
+  int16_t combined = payload_1 << 8;
+  combined |= payload_2;
+
+
+  float angle = (float) combined/ 1000.0;
+
+  // ROS_INFO_STREAM("Message id:" << std::endl << message_id);
+  // ROS_INFO_STREAM("Angle:" << std::endl << angle);
+}
 
 /* //{ callbackDrs() */
 
