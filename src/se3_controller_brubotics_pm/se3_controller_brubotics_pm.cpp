@@ -16,6 +16,10 @@
 #include <geometry_msgs/Twist.h> //for the velocity
 //#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
+// Raph
+#include <mrs_msgs/BacaProtocol.h>
+#include <std_msgs/UInt8.h>
+
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
@@ -25,6 +29,7 @@
 #include <geometry_msgs/Vector3Stamped.h>
 // custom publisher
 #include <std_msgs/Float64.h>
+
 
 //}
 
@@ -128,6 +133,12 @@ private:
   geometry_msgs::Twist load_velocity;
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
   Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
+
+  // Raph
+  ros::Subscriber data_payload_sub;
+  //Eigen::Array3d data_payload = Eigen::Array3d::Zero(3);
+  std::array<uint8_t, 3> data_payload;
+  void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
 
   // | ----------------------- gain muting ---------------------- |
 
@@ -475,6 +486,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   
   load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsPm::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
   
+  //Raph
+  data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3ControllerBruboticsPm::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+
   // | ----------------- get the current heading ---------------- |
   double uav_heading = 0;
 
@@ -1425,10 +1439,29 @@ void Se3ControllerBruboticsPm::loadStatesCallback(const gazebo_msgs::LinkStatesC
   load_lin_vel[0]= load_velocity.linear.x;
   load_lin_vel[1]= load_velocity.linear.y;
   load_lin_vel[2]= load_velocity.linear.z;
-  ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
+  //ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
   //ROS_INFO_STREAM("Velocity:" << std::endl << load_lin_vel);
 }
 
+// Raph
+
+void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) {
+  int message_id;
+  int payload_1;
+  int payload_2;
+  message_id = msg->payload[0];
+  payload_1 = msg->payload[1];
+  payload_2 = msg->payload[2];
+
+  int16_t combined = payload_1 << 8;
+  combined |= payload_2;
+
+
+  float angle = (float) combined/ 1000.0;
+
+  // ROS_INFO_STREAM("Message id:" << std::endl << message_id);
+  // ROS_INFO_STREAM("Angle:" << std::endl << angle);
+}
 
 /* //{ callbackDrs() */
 
