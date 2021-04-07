@@ -143,12 +143,6 @@ private:
   std::array<uint8_t, 3> data_payload;
   void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
 
-  // Raph
-  ros::Subscriber data_payload_sub;
-  //Eigen::Array3d data_payload = Eigen::Array3d::Zero(3);
-  std::array<uint8_t, 3> data_payload;
-  void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
-
   // | ----------------------- gain muting ---------------------- |
 
   bool   gains_muted_ = false;  // the current state (may be initialized in activate())
@@ -744,8 +738,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   // 1e method pandolfo
   Klv = Klv *(_uav_mass_ + uav_mass_difference_);
   //2e method pandolfo
-  Kpl = Kpl *(_uav_mass_ + uav_mass_difference_);;
-  Kdl = Kdl *(_uav_mass_ + uav_mass_difference_);;
+  Kpl = Kpl *(_uav_mass_ + uav_mass_difference_);
+  Kdl = Kdl *(_uav_mass_ + uav_mass_difference_);
 
   // a print to test if the gains change so you know where to change:
   // ROS_INFO_STREAM("Se3ControllerBruboticsPm: Kp = \n" << Kp);
@@ -800,7 +794,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       Evl = Evl*0;
     }
   }
-  
   
   Eigen::Vector3d position_load_feedback = Kpl * Epl.array();
   Eigen::Vector3d velocity_load_feedback = Kdl * Evl.array();
