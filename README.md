@@ -4,7 +4,7 @@ Controllers developed by the summer 2020 Brubotics interns.
 ## How to create a new controller in this package?
 ### Convention
 
-when I write "controller name", I mean the name of the class. It should be written without underscores, with caps, like this:
+when I write "controller name", I mean the name of the class. It should be written without underscores, with caps, and ending with controller, like this:
 > ExampleController
 
 And when I say "controller namespace", I mean the name of the namespace, the cpp file and the folder where it's located. It should be written in lowercase with underscores, like this:
@@ -58,7 +58,7 @@ It follows precisely the same model as the `CMakeLists` file in the ```mrs_uav_c
 ```
 add_library([CONTROLLER NAMESPACE]
   [PATH TO CONTROLLER RELATIVE TO THE PACKAGE, EXAMPLE:
-  src/controller_example/controller_example.cpp]
+  src/example_controller/example_controller.cpp]
   )
 
 add_dependencies([CONTROLLER NAMESPACE]
@@ -75,7 +75,7 @@ target_link_libraries([CONTROLLER NAMESPACE]
 2. In the install command, add our controller to the list:
 ```
 install(TARGETS
-  So3ControllerInterns
+  Se3BruboticsController
   [CONTROLLER NAMESPACE]
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
@@ -102,7 +102,7 @@ The new controller has to be added to the controller list in the `mrs_uav_manage
 
 ```
 controllers : [
-  "So3Controller",
+  "Se3Controller",
   "MpcController",
   "NsfController",
   "FailsafeController",
