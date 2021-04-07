@@ -942,7 +942,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
     }
 
     // saturate the world X
-    double world_integral_saturated = false;
+    bool world_integral_saturated = false;
     if (!std::isfinite(Iw_w_[0])) {
       Iw_w_[0] = 0;
       ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsController]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!");
@@ -1039,7 +1039,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
     }
 
     // saturate the body
-    double body_integral_saturated = false;
+    bool body_integral_saturated = false;
     if (!std::isfinite(Ib_b_[0])) {
       Ib_b_[0] = 0;
       ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsController]: NaN detected in variable 'Ib_b_[0]', setting it to 0!!!");
