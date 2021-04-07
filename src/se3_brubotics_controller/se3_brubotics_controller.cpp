@@ -804,7 +804,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
 
   /* output */
   double thrust_force = f.dot(R.col(2));
-
   double thrust = 0;
 
   //custom publisher
@@ -824,12 +823,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
   pub_thrust_satlimit_physical_.publish(thrust_saturation_physical);
   pub_thrust_satlimit_.publish(_thrust_saturation_);
   pub_hover_thrust_.publish(hover_thrust);
-
-  if (thrust_force >= 0) {
-    // OLD thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
-    thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force);
-  } else {
-    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
+  if (!control_reference->use_thrust) {
+    if (thrust_force >= 0) {
+      // OLD thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
+      thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force);
+    } else {
+      ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
+    }
+  }
+  else {
+    // the thrust is overriden from the tracker command
+    thrust = control_reference->thrust;
   }
 
   // saturate the thrust
