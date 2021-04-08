@@ -1,3 +1,9 @@
+<library path="lib/libSe3CopyController">
+  <class name="controllers_brubotics/Se3CopyController" type="mrs_uav_controllers::se3_copy_controller::Se3CopyController" base_class_type="mrs_uav_managers::Controller">
+    <description>This is Se3CopyController and is the original Se3Controller copied from CTU which is only extended with some publishers for plotting graphs.</description>
+  </class>
+</library>
+
 <library path="lib/libSe3BruboticsController">
   <class name="controllers_brubotics/Se3BruboticsController" type="mrs_uav_controllers::se3_brubotics_controller::Se3BruboticsController" base_class_type="mrs_uav_managers::Controller">
     <description>This is Se3BruboticsController adapted from CTU and custom designed by Bryan Convens.</description>

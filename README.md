@@ -3,6 +3,7 @@ Controllers developed by the summer 2020 Brubotics interns.
 
 ## How to create a new controller in this package?
 ### Convention
+When creating a new controller, DO NOT use the same name if this name was already used for a controller of ctu. Otherwise your new controller will overwrite the one of ctu.
 
 when I write "controller name", I mean the name of the class. It should be written without underscores, with caps, and ending with controller, like this:
 > ExampleController
