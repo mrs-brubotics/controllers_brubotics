@@ -588,8 +588,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
-  // Rpl - position reference in global frame
-  // Rvl - velocity reference in global frame
+  // Rpl - position reference load in global frame
+  // Rvl - velocity reference load in global frame
   Eigen::Vector3d Rpl = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Rvl = Eigen::Vector3d::Zero(3);
 
@@ -640,7 +640,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   if (control_reference->use_velocity_vertical) {
-    Klv[2] = 0.4;
+    Klv[2] = 0;
   } 
   else {
     Klv[2] = 0;
@@ -651,7 +651,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
  
   if (control_reference->use_velocity_horizontal) {
-      Kpl[0] = 1.5;
+      Kpl[0] = 0;
       Kpl[1] = Kpl[0];
   } else {
       Kpl[0] = 0;
@@ -659,7 +659,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   if (control_reference->use_velocity_vertical) {
-    Kpl[2] = 1.5;
+    Kpl[2] = 0;
   } 
   else {
     Kpl[2] = 0;
@@ -667,7 +667,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
  
   if (control_reference->use_velocity_horizontal) {
-      Kdl[0] = 1.5;
+      Kdl[0] = 0;
       Kdl[1] = Kdl[0];
   } else {
       Kdl[0] = 0;
@@ -675,7 +675,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   if (control_reference->use_velocity_vertical) {
-    Kdl[2] = 1.5;
+    Kdl[2] = 0;
   } 
   else {
     Kdl[2] = 0;
@@ -802,7 +802,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   Eigen::Vector3d velocity_load_feedback = Kdl * Evl.array();
   //ROS_INFO_STREAM("Position feedback:" << std::endl << position_load_feedback);
 
-  ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
+  //ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
 
   {
     std::scoped_lock lock(mutex_integrals_);
