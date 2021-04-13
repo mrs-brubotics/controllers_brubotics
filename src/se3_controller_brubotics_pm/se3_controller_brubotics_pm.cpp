@@ -630,10 +630,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-    Epl = Rpl - Opl - load_pose_position_offset;
+    Epl = Rpl - Opl - load_pose_position_offset; // remove offset because the because load does not spawn perfectly under drone
   }
-  //ROS_INFO_STREAM("Error Position load:" << std::endl << Opl);
-
+  
   // Load velocity control error
   Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3);
 
@@ -665,7 +664,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
  
   if (control_reference->use_velocity_horizontal) {
-      Kpl[0] = 0;
+      Kpl[0] = 0.0;
       Kpl[1] = Kpl[0];
   } else {
       Kpl[0] = 0;
@@ -813,10 +812,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     }
     if(payload_spawned && abs(Epl[i]) < 0.05)
     {
-      Epl = Epl*0;
-      Evl = Evl*0;
+      Epl[i] = Epl[i]*0;
     }
   }
+
+  ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
   
   Eigen::Vector3d position_load_feedback = Kpl * Epl.array();
   Eigen::Vector3d velocity_load_feedback = Kdl * Evl.array();
