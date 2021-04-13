@@ -14,10 +14,6 @@
 #include <geometry_msgs/Pose.h>   // for the position
 #include <geometry_msgs/Twist.h> //for the velocity
 #include <mrs_msgs/FutureTrajectory.h>
-#include <string>
-#include <vector>
-#include <sstream>
-#include <iostream>
 
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
