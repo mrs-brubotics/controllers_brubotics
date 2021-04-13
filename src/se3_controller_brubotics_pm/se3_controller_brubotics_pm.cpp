@@ -626,7 +626,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       load_pose_position_offset = Epl;
       remove_offset = false;
     }
-    ROS_INFO_STREAM("Error Position load offset:" << std::endl << load_pose_position_offset);
+    //ROS_INFO_STREAM("Error Position load offset:" << std::endl << load_pose_position_offset);
   }
 
   if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
@@ -665,7 +665,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
  
   if (control_reference->use_velocity_horizontal) {
-      Kpl[0] = 3.0;
+      Kpl[0] = 0;
       Kpl[1] = Kpl[0];
   } else {
       Kpl[0] = 0;
@@ -822,7 +822,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   Eigen::Vector3d velocity_load_feedback = Kdl * Evl.array();
   //ROS_INFO_STREAM("Position feedback:" << std::endl << position_load_feedback);
 
-  ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
+  //ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
   //ROS_INFO_STREAM("Error Velocity load:" << std::endl << Evl);
   
 
