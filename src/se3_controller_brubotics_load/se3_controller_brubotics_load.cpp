@@ -659,7 +659,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsLoad::update(con
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
  
   if (control_reference->use_velocity_horizontal) {
-      Kpl[0] = 2;
+      Kpl[0] = 6;
       Kpl[1] = Kpl[0];
   } else {
       Kpl[0] = 0;
@@ -1563,7 +1563,7 @@ void Se3ControllerBruboticsLoad::loadStatesCallback(const gazebo_msgs::LinkState
         load_pose_position[i] = load_pose_position[i];
       }
   }
-  //ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
+  ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
 
   load_velocity = loadmsg->twist[load_index];
   custom_publisher_load_pose.publish(load_pose);
