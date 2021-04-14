@@ -493,11 +493,20 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
   //added by Aly + Philippe
   // | ----------------- custon subscriber ---------------- |
+  //ROS_INFO_STREAM("RUN_TYPE \n" << getenv("RUN_TYPE") );
+  if (getenv("RUN_TYPE") == "simulation")
+  {
+    // subscriber of the simulation
+    load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsPm::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
+  }else{
+    // subscriber of the encoder
+    data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3ControllerBruboticsPm::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+  }
   
-  load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsPm::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
+  //load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsPm::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
   
   //Raph
-  data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3ControllerBruboticsPm::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+  //data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3ControllerBruboticsPm::BacaCallback, this, ros::TransportHints().tcpNoDelay());
 
   // | ----------------- get the current heading ---------------- |
   double uav_heading = 0;
@@ -757,6 +766,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   //2e method pandolfo
   Kpl = Kpl *(_uav_mass_ + uav_mass_difference_);
   Kdl = Kdl *(_uav_mass_ + uav_mass_difference_);
+  //ROS_INFO_STREAM("RUN_TYPE \n" << getenv("RUN_TYPE") );
 
   // a print to test if the gains change so you know where to change:
   // ROS_INFO_STREAM("Se3ControllerBruboticsPm: Kp = \n" << Kp);
@@ -816,7 +826,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     }
   }
 
-  ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
+  //ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
   
   Eigen::Vector3d position_load_feedback = -Kpl * Epl.array();
   Eigen::Vector3d velocity_load_feedback = -Kdl * Evl.array();
