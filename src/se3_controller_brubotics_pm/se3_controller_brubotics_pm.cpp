@@ -18,10 +18,6 @@
 #include <mrs_msgs/BacaProtocol.h>
 #include <std_msgs/UInt8.h>
 
-// Raph
-#include <mrs_msgs/BacaProtocol.h>
-#include <std_msgs/UInt8.h>
-
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
 #include <mrs_lib/utils.h>
@@ -136,14 +132,13 @@ private:
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
   Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d load_pose_position = Eigen::Vector3d::Zero(3);
-  
   bool payload_spawned = false;
   bool remove_offset = true;
   Eigen::Vector3d load_pose_position_offset = Eigen::Vector3d::Zero(3);
+  std::string run_type;
 
   // Raph
   ros::Subscriber data_payload_sub;
-  //Eigen::Array3d data_payload = Eigen::Array3d::Zero(3);
   std::array<uint8_t, 3> data_payload;
   void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
 
@@ -492,21 +487,22 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   //added by Aly + Philippe
-  // | ----------------- custon subscriber ---------------- |
-  //ROS_INFO_STREAM("RUN_TYPE \n" << getenv("RUN_TYPE") );
-  if (getenv("RUN_TYPE") == "simulation")
+  run_type = getenv("RUN_TYPE");
+  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
+
+  if (run_type == "simulation")
   {
     // subscriber of the simulation
     load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsPm::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
+    //ROS_INFO_STREAM("you are in simulation mode" );
+
   }else{
     // subscriber of the encoder
+    //Raph
     data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3ControllerBruboticsPm::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+    //ROS_INFO_STREAM("you are in experiment mode" );
+
   }
-  
-  //load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsPm::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
-  
-  //Raph
-  //data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3ControllerBruboticsPm::BacaCallback, this, ros::TransportHints().tcpNoDelay());
 
   // | ----------------- get the current heading ---------------- |
   double uav_heading = 0;
@@ -1597,7 +1593,6 @@ void Se3ControllerBruboticsPm::loadStatesCallback(const gazebo_msgs::LinkStatesC
 }
 
 // Raph
-
 void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) {
   int message_id;
   int payload_1;
