@@ -13,7 +13,10 @@
 #include <gazebo_msgs/LinkStates.h>
 #include <geometry_msgs/Pose.h>   // for the position
 #include <geometry_msgs/Twist.h> //for the velocity
-#include <mrs_msgs/FutureTrajectory.h>
+
+// Raph
+#include <mrs_msgs/BacaProtocol.h>
+#include <std_msgs/UInt8.h>
 
 #include <mrs_lib/profiler.h>
 #include <mrs_lib/param_loader.h>
@@ -132,6 +135,13 @@ private:
   bool remove_offset = true;
   Eigen::Vector3d load_pose_position_offset = Eigen::Vector3d::Zero(3);
   bool uav_id = false; // false = uav2, true = uav1
+  std::string run_type;
+  std::string uav_name;
+
+  // Raph
+  ros::Subscriber data_payload_sub;
+  std::array<uint8_t, 3> data_payload;
+  void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
 
   // | ----------------------- gain muting ---------------------- |
 
@@ -479,18 +489,35 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsLoad::update(con
     }
   }
 
-  //added by Aly 
-  // | ----------------- to see which UAV it is ---------------- |
-  if (uav_state->child_frame_id == "uav1/fcu")
-  {
-    uav_id = true; //uav 1
-  }else{
-    uav_id = false; //uav 2
-  }
+  
 
   //added by Aly
-  // | ----------------- custon subscriber ---------------- |
-  load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsLoad::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
+  run_type = getenv("RUN_TYPE");
+  uav_name = getenv("UAV_NAME");
+  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
+
+  if (run_type == "simulation")
+  {
+    // to see which UAV it is
+    if (uav_name == "uav1")
+    {
+      uav_id = true; //uav 1
+    }else{
+      uav_id = false; //uav 2
+    }
+
+    // subscriber of the simulation
+    load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsLoad::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
+    //ROS_INFO_STREAM("you are in simulation mode" );
+
+  }else{
+    // subscriber of the experiments
+    // add a way to see with UAV is used 
+    //Raph
+    //data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3ControllerBruboticsLoad::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+    //ROS_INFO_STREAM("you are in experiment mode" );
+
+  }
   
   // | ----------------- get the current heading ---------------- |
 
@@ -628,7 +655,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsLoad::update(con
       load_pose_position_offset = Epl;
       remove_offset = false;
     }
-    ROS_INFO_STREAM("Error Position load offset:" << std::endl << load_pose_position_offset);
+    //ROS_INFO_STREAM("Error Position load offset:" << std::endl << load_pose_position_offset);
   }
 
   if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
@@ -1563,7 +1590,7 @@ void Se3ControllerBruboticsLoad::loadStatesCallback(const gazebo_msgs::LinkState
         load_pose_position[i] = load_pose_position[i];
       }
   }
-  ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
+  //ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
 
   load_velocity = loadmsg->twist[load_index];
   custom_publisher_load_pose.publish(load_pose);
@@ -1574,6 +1601,25 @@ void Se3ControllerBruboticsLoad::loadStatesCallback(const gazebo_msgs::LinkState
 
   //ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
   //ROS_INFO_STREAM("Position:" << std::endl << load_pose_position);
+}
+
+// Raph
+void Se3ControllerBruboticsLoad::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) {
+  int message_id;
+  int payload_1;
+  int payload_2;
+  message_id = msg->payload[0];
+  payload_1 = msg->payload[1];
+  payload_2 = msg->payload[2];
+
+  int16_t combined = payload_1 << 8;
+  combined |= payload_2;
+
+
+  float angle = (float) combined/ 1000.0;
+
+  // ROS_INFO_STREAM("Message id:" << std::endl << message_id);
+  // ROS_INFO_STREAM("Angle:" << std::endl << angle);
 }
 
 /* //{ callbackDrs() */
