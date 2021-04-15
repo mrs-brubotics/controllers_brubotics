@@ -751,6 +751,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     // because we need to control the attitude.
     Kq << kqxy_, kqxy_, kqz_;
   }
+  ROS_INFO_STREAM("Se3ControllerBruboticsPm: Mass load = \n" << getenv("LOAD_MASS"));
 
   uav_mass_difference_ = 0.25; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
