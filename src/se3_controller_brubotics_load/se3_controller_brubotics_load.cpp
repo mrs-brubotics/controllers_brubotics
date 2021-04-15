@@ -659,7 +659,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsLoad::update(con
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
  
   if (control_reference->use_velocity_horizontal) {
-      Kpl[0] = 6;
+      Kpl[0] = 7.0; //Best value 7.0
       Kpl[1] = Kpl[0];
   } else {
       Kpl[0] = 0;
@@ -667,7 +667,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsLoad::update(con
   }
 
   if (control_reference->use_velocity_vertical) {
-    Kpl[2] = 0;
+    Kpl[2] = 0; 
   } 
   else {
     Kpl[2] = 0;
@@ -675,7 +675,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsLoad::update(con
 
  
   if (control_reference->use_velocity_horizontal) {
-      Kdl[0] = 0;
+      Kdl[0] = 0.5; //Best value 0.5
       Kdl[1] = Kdl[0];
   } else {
       Kdl[0] = 0;
@@ -742,7 +742,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsLoad::update(con
     Kq << kqxy_, kqxy_, kqz_;
   }
 
-  uav_mass_difference_ = 0; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  uav_mass_difference_ = 0.5; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
   // added by Aly
@@ -825,7 +825,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsLoad::update(con
   // OLD Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, _g_));// custom 2
   
   // Changed by Aly
-  Eigen::Vector3d f = position_load_feedback + velocity_load_feedback + position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, common_handlers_->g));// custom 2
+  Eigen::Vector3d f = position_load_feedback + velocity_load_feedback + position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g));// custom 2
   //ROS_INFO_STREAM("Se3ControllerBruboticsLoad: _g_ + or -?= \n" << _g_);
   // also check line above uav_mass_difference_ = 0!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
