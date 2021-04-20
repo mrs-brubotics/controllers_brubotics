@@ -316,8 +316,14 @@ void Se3ControllerBruboticsPm::initialize(const ros::NodeHandle& parent_nh, [[ma
   pub_hover_thrust_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
 
   //added by Aly + Philippe
-  custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
-
+  run_type = getenv("RUN_TYPE");
+  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
+  if (run_type == "simulation")
+  {
+    custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
+  }else{
+    //publisher for encoders
+  }
 
   // | --------------- dynamic reconfigure server --------------- |
 
@@ -491,8 +497,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   //added by Aly + Philippe
-  run_type = getenv("RUN_TYPE");
-  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
 
   if (run_type == "simulation")
   {
@@ -604,7 +608,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   // Rpl - position reference load in global frame
   // Rvl - velocity reference load in global frame
   Eigen::Vector3d Rpl = Eigen::Vector3d::Zero(3);
-  Eigen::Vector3d Rvl = Eigen::Vector3d::Zero(3);
+  //Eigen::Vector3d Rvl = Eigen::Vector3d::Zero(3);
 
   // Opl - position load in global frame
   // Ovl - velocity load in global frame
@@ -631,20 +635,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       } 
     }
 
-    if (control_reference->use_velocity_horizontal) {
-      Rvl[0] = control_reference->velocity.x;
-      Rvl[1] = control_reference->velocity.y;
-    } else {
-      Rvl[0] = 0;
-      Rvl[1] = 0;
-    }
-
-    if (control_reference->use_velocity_vertical) {
-      Rvl[2] = control_reference->velocity.z;
-    } else {
-      Rvl[2] = 0;
-    }
-    ROS_INFO_STREAM("load_position = \n" << Opl);
+    //ROS_INFO_STREAM("load_position = \n" << Opl);
 
     // added by Raph
     if(payload_spawned){
@@ -662,17 +653,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
-      Evl = Rvl - Ovl;
+      Evl = Rv - Ovl;
     }
   }else{
     Eigen::Vector3d Opl;
     Eigen::Vector3d Ovl;
-    ROS_INFO_STREAM("load_position = \n" << Opl);
-    // define Rpl and Rvl 
+    //ROS_INFO_STREAM("load_position = \n" << Opl);
+    // define Rpl 
   }
   
 
   // 1e method pandolfo
+  /*
   Eigen::Array3d  Klv = Eigen::Array3d::Zero(3); // Kv for the load
  
   if (control_reference->use_velocity_horizontal) {
@@ -689,6 +681,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   else {
     Klv[2] = 0;
   }
+  */
 
   // 2e method pandolfo
   Eigen::Array3d  Kpl = Eigen::Array3d::Zero(3); 
@@ -780,7 +773,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
   //Added by Phil
 
-  uav_mass_difference_ = std::stod(getenv("LOAD_MASS")); // To take mass load into account! stod to transform string defined in session to double
+  uav_mass_difference_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
 
   //ROS_INFO_STREAM("Se3ControllerBruboticsPm: Mass load = \n" << uav_mass_difference_);
   //uav_mass_difference_ = 0.25; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -789,7 +782,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   
   // added by Aly + Philippe
   // 1e method pandolfo
-  Klv = Klv *(_uav_mass_ + uav_mass_difference_);
+  //Klv = Klv *(_uav_mass_ + uav_mass_difference_);
+
   //2e method pandolfo
   Kpl = Kpl *(_uav_mass_ + uav_mass_difference_);
   Kdl = Kdl *(_uav_mass_ + uav_mass_difference_);
@@ -1640,6 +1634,7 @@ void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr
 
   float encoder_output = (float) combined/ 1000.0;
 
+  //added by Aly
   if (message_id == 24)
   {
     encoder_angle_1 = encoder_output;
@@ -1654,6 +1649,15 @@ void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr
     encoder_velocity_2 = encoder_output;
   }
   
+/*
+  load_pose_position[0] = ;
+  load_pose_position[1] = ;
+  load_pose_position[2] = ;
+
+  load_lin_vel[0]= ;
+  load_lin_vel[1]= ;
+  load_lin_vel[2]= ;
+*/
   ROS_INFO_STREAM("encoder_angle_1:" << std::endl << encoder_angle_1);
   ROS_INFO_STREAM("encoder_angle_2:" << std::endl << encoder_angle_2);
 }
