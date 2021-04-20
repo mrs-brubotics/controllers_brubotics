@@ -791,7 +791,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsLoad::update(con
   }
 
   //Added by Phil
-
   uav_mass_difference_ = std::stod(getenv("LOAD_MASS"))/2; // // To take mass load into account! stod to transform string defined in session to double, divide by 2 because 2 drones
 
   //ROS_INFO_STREAM("Se3ControllerBruboticsPm: Mass load = \n" << uav_mass_difference_);

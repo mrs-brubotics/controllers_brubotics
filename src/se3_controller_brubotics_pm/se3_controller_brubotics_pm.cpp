@@ -773,7 +773,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   //Added by Phil
-
   uav_mass_difference_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
 
   //ROS_INFO_STREAM("Se3ControllerBruboticsPm: Mass load = \n" << uav_mass_difference_);
