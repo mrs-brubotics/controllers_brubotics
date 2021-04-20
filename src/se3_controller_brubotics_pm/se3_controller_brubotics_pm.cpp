@@ -13,6 +13,7 @@
 #include <gazebo_msgs/LinkStates.h>
 #include <geometry_msgs/Pose.h>   // for the position
 #include <geometry_msgs/Twist.h> //for the velocity
+#include <math.h>  
 
 // Raph
 #include <mrs_msgs/BacaProtocol.h>
@@ -1650,9 +1651,9 @@ void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr
   }
   
 /*
-  load_pose_position[0] = ;
-  load_pose_position[1] = ;
-  load_pose_position[2] = ;
+  load_pose_position[0] = cable_length*sin(encoder_angle_1);
+  load_pose_position[1] = cable_length*sin(encoder_angle_2);
+  load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2)));
 
   load_lin_vel[0]= ;
   load_lin_vel[1]= ;
