@@ -609,20 +609,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   // Rpl - position reference load in global frame
   // Rvl - velocity reference load in global frame
   Eigen::Vector3d Rpl = Eigen::Vector3d::Zero(3);
-  //Eigen::Vector3d Rvl = Eigen::Vector3d::Zero(3);
 
   // Opl - position load in global frame
   // Ovl - velocity load in global frame
-  //Eigen::Vector3d Opl(load_pose_position[0], load_pose_position[1], load_pose_position[2]);
-  //Eigen::Vector3d Ovl(load_lin_vel[0], load_lin_vel[1], load_lin_vel[2]);
-  double cable_length = 1.2;
-
+  Eigen::Vector3d Opl(load_pose_position[0], load_pose_position[1], load_pose_position[2]);
+  Eigen::Vector3d Ovl(load_lin_vel[0], load_lin_vel[1], load_lin_vel[2]);
   Eigen::Vector3d Epl = Eigen::Vector3d::Zero(3); // Load position control error
   Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3); // Load velocity control error
+  double cable_length = std::stod(getenv("CABLE_LENGTH")); // is changed inside session.yml to take length cable into account! stod to transform string defined in session to double.
+  //ROS_INFO_STREAM("Cable length = \n" << cable_length);
 
   if (run_type == "simulation"){
-    Eigen::Vector3d Opl(load_pose_position[0], load_pose_position[1], load_pose_position[2]);
-    Eigen::Vector3d Ovl(load_lin_vel[0], load_lin_vel[1], load_lin_vel[2]);
 
     if (control_reference->use_position_vertical || control_reference->use_position_horizontal) {
 
@@ -657,13 +654,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       Evl = Rv - Ovl;
     }
   }else{
-    Eigen::Vector3d Opl;
-    Eigen::Vector3d Ovl;
     //ROS_INFO_STREAM("load_position = \n" << Opl);
-    // define Rpl 
+    if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
+      Epl = Opl; // since encoder gives offset from drone position
+    }
+    if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
+      control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
+      Evl = Rv - Ovl;
+    }
   }
   
-
   // 1e method pandolfo
   /*
   Eigen::Array3d  Klv = Eigen::Array3d::Zero(3); // Kv for the load
@@ -1655,9 +1655,9 @@ void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr
   load_pose_position[1] = cable_length*sin(encoder_angle_2);
   load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2)));
 
-  load_lin_vel[0]= ;
-  load_lin_vel[1]= ;
-  load_lin_vel[2]= ;
+  load_lin_vel[0]= encoder_velocity_1*cable_length;
+  load_lin_vel[1]= encoder_velocity_2*cable_length;
+  load_lin_vel[2]= 0;
 */
   ROS_INFO_STREAM("encoder_angle_1:" << std::endl << encoder_angle_1);
   ROS_INFO_STREAM("encoder_angle_2:" << std::endl << encoder_angle_2);
