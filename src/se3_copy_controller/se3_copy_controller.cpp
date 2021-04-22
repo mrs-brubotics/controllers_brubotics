@@ -17,6 +17,9 @@
 
 #include <geometry_msgs/Vector3Stamped.h>
 
+// custom publisher
+#include <std_msgs/Float64.h>
+
 //}
 
 #define OUTPUT_ATTITUDE_RATE 0
@@ -155,6 +158,17 @@ private:
   double    rampup_duration_;
   ros::Time rampup_start_time_;
   ros::Time rampup_last_time_;
+
+  // | ----------------------custom publishers ------------------ |
+
+  ros::Publisher custom_publisher_projected_thrust_;
+  ros::Publisher custom_publisher_thrust_;
+  ros::Publisher pub_thrust_satlimit_;
+  ros::Publisher pub_thrust_satlimit_physical_;
+  ros::Publisher pub_thrust_satval_;
+  ros::Publisher pub_hover_thrust_;
+  ros::Publisher pub_tilt_angle_;;
+
 };
 
 //}
@@ -262,6 +276,14 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   Iw_w_                = Eigen::Vector2d::Zero(2);
   Ib_b_                = Eigen::Vector2d::Zero(2);
 
+  // custom publisher
+  custom_publisher_projected_thrust_ = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
+  custom_publisher_thrust_           = nh_.advertise<std_msgs::Float64>("custom_thrust",1);
+  pub_thrust_satlimit_physical_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit_physical",1);
+  pub_thrust_satlimit_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit",1);
+  pub_thrust_satval_           = nh_.advertise<std_msgs::Float64>("thrust_satval",1);
+  pub_hover_thrust_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
+  pub_tilt_angle_            = nh_.advertise<std_msgs::Float64>("tilt_angle",1);
   // | --------------- dynamic reconfigure server --------------- |
 
   drs_params_.kpxy             = kpxy_;
@@ -285,7 +307,6 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   drs_->updateConfig(drs_params_);
   Drs_t::CallbackType f = boost::bind(&Se3CopyController::callbackDrs, this, _1, _2);
   drs_->setCallback(f);
-
   // | ------------------------ profiler ------------------------ |
 
   profiler_ = mrs_lib::Profiler(nh_, "Se3CopyController", _profiler_enabled_);
@@ -578,6 +599,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
 
+  // ROS_INFO_STREAM("[Se3CopyController]: Kp = \n" << Kp);
+  // ROS_INFO_STREAM("Se3BruboticsController: Kv = \n" << Kv);
+  // ROS_INFO_STREAM("Se3BruboticsController: Ka = \n" << Ka);
+  // ROS_INFO_STREAM("Se3BruboticsController: Kq = \n" << Kq);
+
   // | --------------- desired orientation matrix --------------- |
 
   // get body integral in the world frame
@@ -678,6 +704,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   f_norm[1] = sin(theta) * sin(phi);
   f_norm[2] = cos(theta);
 
+  // publish the tilt angle
+  pub_tilt_angle_.publish(theta);
+
   // | ------------- construct the rotational matrix ------------ |
 
   Eigen::Matrix3d Rd;
@@ -769,6 +798,24 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   double thrust_force = f.dot(R.col(2));
   double thrust       = 0;
 
+  // custom publisher
+  custom_publisher_projected_thrust_.publish(thrust_force);
+  double thrust_norm = sqrt(f(0,0)*f(0,0)+f(1,0)*f(1,0)+f(2,0)*f(2,0)); // norm of f ( not projected on the z axis of the UAV frame)
+  custom_publisher_thrust_.publish(thrust_norm);
+  // print _motor_params_.A and _motor_params_.B
+  // ROS_INFO_STREAM("_motor_params_.A = \n" << _motor_params_.A);
+  // ROS_INFO_STREAM("_motor_params_.B = \n" << _motor_params_.B);
+  // ROS_INFO_STREAM("_thrust_saturation_ = \n" << _thrust_saturation_);
+  // OLD double thrust_saturation_physical = pow((_thrust_saturation_-_motor_params_.B)/_motor_params_.A, 2);
+  double thrust_saturation_physical = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, _thrust_saturation_);
+  // ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
+  // double hover_thrust = total_mass*_g_; use this as most correct if total_mass used in control
+  double hover_thrust = _uav_mass_*common_handlers_->g;
+  // publish these so you have them in matlab
+  pub_thrust_satlimit_physical_.publish(thrust_saturation_physical);
+  pub_thrust_satlimit_.publish(_thrust_saturation_);
+  pub_hover_thrust_.publish(hover_thrust);
+
   if (!control_reference->use_thrust) {
     if (thrust_force >= 0) {
       thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force);
@@ -796,6 +843,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     thrust = 0.0;
     ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: saturating thrust to 0");
   }
+
+  // custom publisher
+  double thrust_physical_saturated = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, thrust);
+  //ROS_INFO_STREAM("thrust_physical_saturated = \n" << thrust_physical_saturated);
+  pub_thrust_satval_.publish(thrust_physical_saturated);
 
   // prepare the attitude feedback
   Eigen::Vector3d q_feedback = -Kq * Eq.array();

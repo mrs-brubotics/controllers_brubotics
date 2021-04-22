@@ -101,13 +101,14 @@ private:
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
-// custom publisher
+// custom publishers
   ros::Publisher custom_publisher_projected_thrust_;
   ros::Publisher custom_publisher_thrust_;
   ros::Publisher pub_thrust_satlimit_;
   ros::Publisher pub_thrust_satlimit_physical_;
   ros::Publisher pub_thrust_satval_;
   ros::Publisher pub_hover_thrust_;
+  ros::Publisher pub_tilt_angle_;
   ros::NodeHandle                                    nh_;
   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers;
 
@@ -281,7 +282,7 @@ void Se3BruboticsController::initialize(const ros::NodeHandle& parent_nh, [[mayb
   pub_thrust_satlimit_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit",1);
   pub_thrust_satval_           = nh_.advertise<std_msgs::Float64>("thrust_satval",1);
   pub_hover_thrust_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
-
+  pub_tilt_angle_            = nh_.advertise<std_msgs::Float64>("tilt_angle",1);
   // | --------------- dynamic reconfigure server --------------- |
 
   drs_params_.kpxy             = kpxy_;
@@ -600,7 +601,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
 
-    // a print to test if the gains change so you know where to change:
+  // a print to test if the gains change so you know where to change:
   // ROS_INFO_STREAM("Se3BruboticsController: Kp = \n" << Kp);
   // ROS_INFO_STREAM("Se3BruboticsController: Kv = \n" << Kv);
   // ROS_INFO_STREAM("Se3BruboticsController: Ka = \n" << Ka);
@@ -713,6 +714,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
   f_norm[0] = sin(theta) * cos(phi);
   f_norm[1] = sin(theta) * sin(phi);
   f_norm[2] = cos(theta);
+
+  // publish the tilt angle
+  pub_tilt_angle_.publish(theta);
 
   // | ------------- construct the rotational matrix ------------ |
 

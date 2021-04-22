@@ -1,3 +1,4 @@
+# similar to ~/mrs_workspace/src/uav_core/ros_packages/mrs_uav_managers/config/default/controllers.yaml
 Se3CopyController:
   address: "controllers_brubotics/Se3CopyController"
   namespace: "se3_copy_controller"
