@@ -1,5 +1,5 @@
 # swarms
 motor_params:
   n_motors: 4
-  a: 0.77522
-  b: -1.2348
+  a:  0.4261
+  b: -0.3499
