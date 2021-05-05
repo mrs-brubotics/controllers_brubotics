@@ -9,7 +9,7 @@
 #include <dynamic_reconfigure/server.h>
 #include <mrs_uav_controllers/se3_controllerConfig.h>
 
-//added by Aly + Philippe 
+//added by Aly 
 #include <gazebo_msgs/LinkStates.h>
 #include <geometry_msgs/Pose.h>   // for the position
 #include <geometry_msgs/Twist.h> //for the velocity
@@ -29,7 +29,6 @@
 // custom publisher
 #include <std_msgs/Float64.h>
 
-
 //}
 
 #define OUTPUT_ATTITUDE_RATE 0
@@ -38,12 +37,12 @@
 namespace mrs_uav_controllers
 {
 
-namespace se3_controller_brubotics_pm
+namespace se3_brubotics_load_controller
 {
 
-/* //{ class Se3ControllerBruboticsPm */
+/* //{ class Se3BruboticsLoadController */
 
-class Se3ControllerBruboticsPm : public mrs_uav_managers::Controller {
+class Se3BruboticsLoadController : public mrs_uav_managers::Controller {
 
 public:
   void initialize(const ros::NodeHandle& parent_nh, const std::string name, const std::string name_space, const double uav_mass,
@@ -122,10 +121,10 @@ private:
   ros::NodeHandle                                    nh_;
   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers;
 
-  //added by Aly + Philippe
+  //added by Aly
   ros::Publisher custom_publisher_load_pose;
 
-  //added by Aly + Philippe
+  //added by Aly 
   // | ----------------- custon subscriber ---------------- |
   ros::Subscriber load_state_sub;
   geometry_msgs::Pose load_pose;
@@ -136,7 +135,9 @@ private:
   bool payload_spawned = false;
   bool remove_offset = true;
   Eigen::Vector3d load_pose_position_offset = Eigen::Vector3d::Zero(3);
+  bool uav_id = false; // false = uav2, true = uav1
   std::string run_type;
+  std::string uav_name;
   double cable_length;
   float encoder_angle_1;
   float encoder_angle_2;
@@ -164,8 +165,9 @@ private:
 
   // | ------------ controller limits and saturations ----------- |
 
-  bool   _tilt_angle_failsafe_enabled_;
+  bool _tilt_angle_failsafe_enabled_;
   double _tilt_angle_failsafe_;
+
   double _thrust_saturation_;
 
   // | ------------------ activation and output ----------------- |
@@ -213,9 +215,9 @@ private:
 
 /* //{ initialize() */
 
-void Se3ControllerBruboticsPm::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space, const double uav_mass,
+void Se3BruboticsLoadController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space, const double uav_mass,
                                std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
-
+                                
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
@@ -225,13 +227,13 @@ void Se3ControllerBruboticsPm::initialize(const ros::NodeHandle& parent_nh, [[ma
 
   // | ------------------- loading parameters ------------------- |
 
-  mrs_lib::ParamLoader param_loader(nh_, "Se3ControllerBruboticsPm");
+  mrs_lib::ParamLoader param_loader(nh_, "Se3BruboticsLoadController");
 
   param_loader.loadParam("version", _version_);
 
   if (_version_ != VERSION) {
 
-    ROS_ERROR("[Se3ControllerBruboticsPm]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
+    ROS_ERROR("[Se3BruboticsLoadController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
     ros::shutdown();
   }
 
@@ -271,9 +273,10 @@ void Se3ControllerBruboticsPm::initialize(const ros::NodeHandle& parent_nh, [[ma
   param_loader.loadParam("constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
   param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
-    ROS_ERROR("[Se3Controller]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
+    ROS_ERROR("[Se3ControllerLoad]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
     ros::shutdown();
   }
+
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
 
   // gain filtering
@@ -293,14 +296,14 @@ void Se3ControllerBruboticsPm::initialize(const ros::NodeHandle& parent_nh, [[ma
   param_loader.loadParam("angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
 
   if (!param_loader.loadedSuccessfully()) {
-    ROS_ERROR("[Se3ControllerBruboticsPm]: could not load all parameters!");
+    ROS_ERROR("[Se3BruboticsLoadController]: could not load all parameters!");
     ros::shutdown();
   }
 
   // | ---------------- prepare stuff from params --------------- |
 
   if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
-    ROS_ERROR("[Se3ControllerBruboticsPm]: output mode has to be {0, 1}!");
+    ROS_ERROR("[Se3BruboticsLoadController]: output mode has to be {0, 1}!");
     ros::shutdown();
   }
 
@@ -317,15 +320,16 @@ void Se3ControllerBruboticsPm::initialize(const ros::NodeHandle& parent_nh, [[ma
   pub_thrust_satval_           = nh_.advertise<std_msgs::Float64>("thrust_satval",1);
   pub_hover_thrust_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
 
-  //added by Aly + Philippe
-  run_type = getenv("RUN_TYPE");
-  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
-  if (run_type == "simulation")
-  {
-    custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
-  }else{
-    //publisher for encoders
-  }
+
+//added by Aly
+run_type = getenv("RUN_TYPE");
+//ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
+if (run_type == "simulation")
+{
+  custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
+}else{
+  //publisher for encoders
+}
 
   // | --------------- dynamic reconfigure server --------------- |
 
@@ -348,16 +352,16 @@ void Se3ControllerBruboticsPm::initialize(const ros::NodeHandle& parent_nh, [[ma
 
   drs_.reset(new Drs_t(mutex_drs_, nh_));
   drs_->updateConfig(drs_params_);
-  Drs_t::CallbackType f = boost::bind(&Se3ControllerBruboticsPm::callbackDrs, this, _1, _2);
+  Drs_t::CallbackType f = boost::bind(&Se3BruboticsLoadController::callbackDrs, this, _1, _2);
   drs_->setCallback(f);
 
   // | ------------------------ profiler ------------------------ |
 
-  profiler_ = mrs_lib::Profiler(nh_, "Se3ControllerBruboticsPm", _profiler_enabled_);
+  profiler_ = mrs_lib::Profiler(nh_, "Se3BruboticsLoadController", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
 
-  ROS_INFO("[Se3ControllerBruboticsPm]: initialized, version %s", VERSION);
+  ROS_INFO("[Se3BruboticsLoadController]: initialized, version %s", VERSION);
 
   is_initialized_ = true;
 }
@@ -366,11 +370,11 @@ void Se3ControllerBruboticsPm::initialize(const ros::NodeHandle& parent_nh, [[ma
 
 /* //{ activate() */
 
-bool Se3ControllerBruboticsPm::activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_attitude_cmd) {
+bool Se3BruboticsLoadController::activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_attitude_cmd) {
 
   if (last_attitude_cmd == mrs_msgs::AttitudeCommand::Ptr()) {
 
-    ROS_WARN("[Se3ControllerBruboticsPm]: activated without getting the last controller's command");
+    ROS_WARN("[Se3BruboticsLoadController]: activated without getting the last controller's command");
 
     return false;
 
@@ -388,11 +392,11 @@ bool Se3ControllerBruboticsPm::activate(const mrs_msgs::AttitudeCommand::ConstPt
     Iw_w_[1] = -last_attitude_cmd->disturbance_wy_w;
 
     ROS_INFO(
-        "[Se3ControllerBruboticsPm]: setting the mass difference and integrals from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: "
+        "[Se3BruboticsLoadController]: setting the mass difference and integrals from the last AttitudeCmd: mass difference: %.2f kg, Ib_b_: %.2f, %.2f N, Iw_w_: "
         "%.2f, %.2f N",
         uav_mass_difference_, Ib_b_[0], Ib_b_[1], Iw_w_[0], Iw_w_[1]);
 
-    ROS_INFO("[Se3ControllerBruboticsPm]: activated with a last controller's command, mass difference %.2f kg", uav_mass_difference_);
+    ROS_INFO("[Se3BruboticsLoadController]: activated with a last controller's command, mass difference %.2f kg", uav_mass_difference_);
   }
 
   // rampup check
@@ -410,7 +414,7 @@ bool Se3ControllerBruboticsPm::activate(const mrs_msgs::AttitudeCommand::ConstPt
       rampup_direction_ = 0;
     }
 
-    ROS_INFO("[Se3ControllerBruboticsPm]: activating rampup with initial thrust: %.4f, target: %.4f", last_attitude_cmd->thrust, hover_thrust);
+    ROS_INFO("[Se3BruboticsLoadController]: activating rampup with initial thrust: %.4f, target: %.4f", last_attitude_cmd->thrust, hover_thrust);
 
     rampup_active_     = true;
     rampup_start_time_ = ros::Time::now();
@@ -423,7 +427,7 @@ bool Se3ControllerBruboticsPm::activate(const mrs_msgs::AttitudeCommand::ConstPt
   first_iteration_ = true;
   gains_muted_     = true;
 
-  ROS_INFO("[Se3ControllerBruboticsPm]: activated");
+  ROS_INFO("[Se3BruboticsLoadController]: activated");
 
   is_active_ = true;
 
@@ -434,20 +438,20 @@ bool Se3ControllerBruboticsPm::activate(const mrs_msgs::AttitudeCommand::ConstPt
 
 /* //{ deactivate() */
 
-void Se3ControllerBruboticsPm::deactivate(void) {
+void Se3BruboticsLoadController::deactivate(void) {
 
   is_active_           = false;
   first_iteration_     = false;
   uav_mass_difference_ = 0;
 
-  ROS_INFO("[Se3ControllerBruboticsPm]: deactivated");
+  ROS_INFO("[Se3BruboticsLoadController]: deactivated");
 }
 
 //}
 
 /* //{ update() */
 
-const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const mrs_msgs::UavState::ConstPtr&        uav_state,
+const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(const mrs_msgs::UavState::ConstPtr&        uav_state,
                                                                 const mrs_msgs::PositionCommand::ConstPtr& control_reference) {
 
   mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
@@ -474,7 +478,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
     first_iteration_ = false;
 
-    ROS_INFO("[Se3ControllerBruboticsPm]: first iteration");
+    ROS_INFO("[Se3BruboticsLoadController]: first iteration");
 
     return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_attitude_cmd_));
 
@@ -486,7 +490,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
   if (fabs(dt) <= 0.001) {
 
-    ROS_DEBUG("[Se3ControllerBruboticsPm]: the last odometry message came too close (%.2f s)!", dt);
+    ROS_DEBUG("[Se3BruboticsLoadController]: the last odometry message came too close (%.2f s)!", dt);
 
     if (last_attitude_cmd_ != mrs_msgs::AttitudeCommand::Ptr()) {
 
@@ -498,30 +502,42 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     }
   }
 
-  //added by Aly + Philippe
+  
+
+  //added by Aly
+  uav_name = getenv("UAV_NAME");
+  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
+
+  // to see which UAV it is
+  if (uav_name == "uav1")
+  {
+    uav_id = true; //uav 1
+  }else{
+    uav_id = false; //uav 2
+  }
 
   if (run_type == "simulation")
   {
     // subscriber of the simulation
-    load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3ControllerBruboticsPm::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
+    load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3BruboticsLoadController::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
     //ROS_INFO_STREAM("you are in simulation mode" );
 
   }else{
-    // subscriber of the encoder
+    // subscriber of the experiments
     //Raph
-    data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3ControllerBruboticsPm::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+    data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3BruboticsLoadController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
     //ROS_INFO_STREAM("you are in experiment mode" );
-
   }
-
+  
   // | ----------------- get the current heading ---------------- |
+
   double uav_heading = 0;
 
   try {
     uav_heading = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeading();
   }
   catch (...) {
-    ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: could not calculate the UAV heading");
+    ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: could not calculate the UAV heading");
   }
 
   // --------------------------------------------------------------
@@ -603,7 +619,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     Ev = Ov - Rv;
   }
 
-  // added by Aly + Philippe
+// added by Aly 
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -643,15 +659,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
         load_pose_position_offset = Epl;
         remove_offset = false;
       }
+      //ROS_INFO_STREAM("Error Position load offset:" << std::endl << load_pose_position_offset);
     }
-    //ROS_INFO_STREAM("Error Position load offset:" << std::endl << load_pose_position_offset);
 
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
       Epl = Rpl - Opl - load_pose_position_offset; // remove offset because the because load does not spawn perfectly under drone
     }
+    //ROS_INFO_STREAM("Error Position load:" << std::endl << Opl);
+
 
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
-      control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
+        control_reference->use_position_vertical) {  // even wehn use_position_vertical to provide dampening
       Evl = Rv - Ovl;
     }
   }else{
@@ -664,7 +682,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       Evl = Rv - Ovl;
     }
   }
-  
+
   // 1e method pandolfo
   /*
   Eigen::Array3d  Klv = Eigen::Array3d::Zero(3); // Kv for the load
@@ -690,7 +708,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
  
   if (control_reference->use_velocity_horizontal) {
-      Kpl[0] = 7.0;
+      Kpl[0] = 7; //Best value 7.0
       Kpl[1] = Kpl[0];
   } else {
       Kpl[0] = 0;
@@ -698,7 +716,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   if (control_reference->use_velocity_vertical) {
-    Kpl[2] = 0;
+    Kpl[2] = 0; 
   } 
   else {
     Kpl[2] = 0;
@@ -706,7 +724,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
  
   if (control_reference->use_velocity_horizontal) {
-      Kdl[0] = 0.5;
+      Kdl[0] = 0.5; //Best value 0.5
       Kdl[1] = Kdl[0];
   } else {
       Kdl[0] = 0;
@@ -774,27 +792,26 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   }
 
   //Added by Phil
-  uav_mass_difference_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
+  uav_mass_difference_ = std::stod(getenv("LOAD_MASS"))/2; // // To take mass load into account! stod to transform string defined in session to double, divide by 2 because 2 drones
 
   //ROS_INFO_STREAM("Se3ControllerBruboticsPm: Mass load = \n" << uav_mass_difference_);
-  //uav_mass_difference_ = 0.25; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
-  
-  // added by Aly + Philippe
+ 
+  // added by Aly
   // 1e method pandolfo
   //Klv = Klv *(_uav_mass_ + uav_mass_difference_);
-
+  
   //2e method pandolfo
   Kpl = Kpl *(_uav_mass_ + uav_mass_difference_);
   Kdl = Kdl *(_uav_mass_ + uav_mass_difference_);
-  //ROS_INFO_STREAM("RUN_TYPE \n" << getenv("RUN_TYPE") );
 
   // a print to test if the gains change so you know where to change:
-  // ROS_INFO_STREAM("Se3ControllerBruboticsPm: Kp = \n" << Kp);
-  // ROS_INFO_STREAM("Se3ControllerBruboticsPm: Kv = \n" << Kv);
-  // ROS_INFO_STREAM("Se3ControllerBruboticsPm: Ka = \n" << Ka);
-  // ROS_INFO_STREAM("Se3ControllerBruboticsPm: Kq = \n" << Kq);
+  // ROS_INFO_STREAM("Se3BruboticsLoadController: Kp = \n" << Kp);
+  // ROS_INFO_STREAM("Se3BruboticsLoadController: Kv = \n" << Kv);
+  // ROS_INFO_STREAM("Se3BruboticsLoadController: Ka = \n" << Ka);
+  // ROS_INFO_STREAM("Se3BruboticsLoadController: Kq = \n" << Kq);
 
   // | --------------- desired orientation matrix --------------- |
 
@@ -818,7 +835,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       Ib_w[0] = res.value().vector.x;
       Ib_w[1] = res.value().vector.y;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: could not transform the Ib_b_ to the world frame");
+      ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: could not transform the Ib_b_ to the world frame");
     }
   }
 
@@ -832,10 +849,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
   Eigen::Vector3d integral_feedback;
 
-  //added by Aly + Philippe
-  //Eigen::Vector3d velocity_load_feedback = -Klv * load_lin_vel.array();
-  //ROS_INFO_STREAM("Velocity feedback:" << std::endl << velocity_load_feedback);
-  
+  //added by Aly
   if (run_type == "simulation"){ 
     for (int i = 0; i < 3; i++) // in order to set the error to 0 befor the load spawn
     {
@@ -850,15 +864,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       }
     }
   }
-  //ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
   
   Eigen::Vector3d position_load_feedback = -Kpl * Epl.array();
   Eigen::Vector3d velocity_load_feedback = -Kdl * Evl.array();
   //ROS_INFO_STREAM("Position feedback:" << std::endl << position_load_feedback);
-
-  //ROS_INFO_STREAM("Error Position load:" << std::endl << Epl);
-  //ROS_INFO_STREAM("Error Velocity load:" << std::endl << Evl);
-  
 
   {
     std::scoped_lock lock(mutex_integrals_);
@@ -871,10 +880,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   //Eigen::Vector3d f = position_feedback + velocity_feedback + feed_forward; /// no
   // Eigen::Vector3d f = position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, _g_));// custom 1
   // OLD Eigen::Vector3d f = position_feedback + velocity_feedback + _uav_mass_ * (Eigen::Vector3d(0, 0, _g_));// custom 2
- 
-  // changed by Aly + Philippe
-  Eigen::Vector3d f = position_load_feedback + velocity_load_feedback + position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g));// custom 2 //add velocity_load_feedback if load transortation
-  //ROS_INFO_STREAM("Se3ControllerBruboticsPm: _g_ + or -?= \n" << _g_);
+  
+  // Changed by Aly
+  Eigen::Vector3d f = position_load_feedback + velocity_load_feedback + position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g));// custom 2
+  //ROS_INFO_STREAM("Se3BruboticsLoadController: _g_ + or -?= \n" << _g_);
   // also check line above uav_mass_difference_ = 0!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   // | ----------- limiting the downwards acceleration ---------- |
@@ -883,7 +892,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   // if the downwards part of the force is close to counter-act the gravity acceleration
   if (f[2] < 0) {
 
-    ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
+    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
 
     f << 0, 0, 1;
   }
@@ -899,22 +908,22 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   // check for the failsafe limit
   if (!std::isfinite(theta)) {
 
-    ROS_ERROR("[Se3ControllerBruboticsPm]: NaN detected in variable 'theta', returning null");
+    ROS_ERROR("[Se3BruboticsLoadController]: NaN detected in variable 'theta', returning null");
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
   if (_tilt_angle_failsafe_enabled_ && theta > _tilt_angle_failsafe_) {
 
-    ROS_ERROR("[Se3ControllerBruboticsPm]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
+    ROS_ERROR("[Se3BruboticsLoadController]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
               (180.0 / M_PI) * _tilt_angle_failsafe_);
-    ROS_INFO("[Se3ControllerBruboticsPm]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
-    ROS_INFO("[Se3ControllerBruboticsPm]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
-    ROS_INFO("[Se3ControllerBruboticsPm]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
-    ROS_INFO("[Se3ControllerBruboticsPm]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
-    ROS_INFO("[Se3ControllerBruboticsPm]: position_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", control_reference->position.x, control_reference->position.y,
+    ROS_INFO("[Se3BruboticsLoadController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
+    ROS_INFO("[Se3BruboticsLoadController]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
+    ROS_INFO("[Se3BruboticsLoadController]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
+    ROS_INFO("[Se3BruboticsLoadController]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
+    ROS_INFO("[Se3BruboticsLoadController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", control_reference->position.x, control_reference->position.y,
              control_reference->position.z, control_reference->heading);
-    ROS_INFO("[Se3ControllerBruboticsPm]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
+    ROS_INFO("[Se3BruboticsLoadController]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
              uav_state->pose.position.z, uav_heading);
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
@@ -925,7 +934,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
   if (fabs(constraints.tilt) > 1e-3 && theta > constraints.tilt) {
-    ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta / M_PI) * 180.0,
+    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta / M_PI) * 180.0,
                       (constraints.tilt / M_PI) * 180.0);
     theta = constraints.tilt;
   }
@@ -949,7 +958,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
         Rd = mrs_lib::AttitudeConverter(Rd).setHeading(control_reference->heading);
       }
       catch (...) {
-        ROS_ERROR("[Se3ControllerBruboticsPm]: could not set the desired heading");
+        ROS_ERROR("[Se3BruboticsLoadController]: could not set the desired heading");
       }
     }
 
@@ -960,7 +969,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     if (control_reference->use_heading) {
       bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: desired heading was not specified, using current heading instead!");
+      ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: desired heading was not specified, using current heading instead!");
       bxd << cos(uav_heading), sin(uav_heading), 0;
     }
 
@@ -1050,24 +1059,24 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     // OLD thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
     thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force);
   } else {
-    ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
+    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
   }
 
   // saturate the thrust
   if (!std::isfinite(thrust)) {
 
     thrust = 0;
-    ROS_ERROR("[Se3ControllerBruboticsPm]: NaN detected in variable 'thrust', setting it to 0 and returning!!!");
+    ROS_ERROR("[Se3BruboticsLoadController]: NaN detected in variable 'thrust', setting it to 0 and returning!!!");
 
   } else if (thrust > _thrust_saturation_) {
 
     thrust = _thrust_saturation_;
-    ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: saturating thrust to %.2f", _thrust_saturation_);
+    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: saturating thrust to %.2f", _thrust_saturation_);
 
   } else if (thrust < 0.0) {
 
     thrust = 0.0;
-    ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: saturating thrust to 0");
+    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: saturating thrust to 0");
   }
 
   // old double thrust_physical_saturated = pow((thrust-_motor_params_.B)/_motor_params_.A, 2);
@@ -1089,7 +1098,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(control_reference->heading_rate);
     }
     catch (...) {
-      ROS_ERROR("[Se3ControllerBruboticsPm]: exception caught while calculating the desired_yaw_rate feedforward");
+      ROS_ERROR("[Se3BruboticsLoadController]: exception caught while calculating the desired_yaw_rate feedforward");
     }
 
     Rw << 0, 0, desired_yaw_rate;
@@ -1123,14 +1132,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
     }
     catch (...) {
-      ROS_ERROR("[Se3ControllerBruboticsPm]: exception caught while calculating the parasitic heading rate!");
+      ROS_ERROR("[Se3BruboticsLoadController]: exception caught while calculating the parasitic heading rate!");
     }
 
     try {
       rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
     }
     catch (...) {
-      ROS_ERROR("[Se3ControllerBruboticsPm]: exception caught while calculating the parasitic heading rate compensation!");
+      ROS_ERROR("[Se3BruboticsLoadController]: exception caught while calculating the parasitic heading rate compensation!");
     }
   }
 
@@ -1162,7 +1171,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     double world_integral_saturated = false;
     if (!std::isfinite(Iw_w_[0])) {
       Iw_w_[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!");
     } else if (Iw_w_[0] > kiwxy_lim_) {
       Iw_w_[0]                 = kiwxy_lim_;
       world_integral_saturated = true;
@@ -1172,14 +1181,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     }
 
     if (kiwxy_lim_ >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: SE3's world X integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: SE3's world X integral is being saturated!");
     }
 
     // saturate the world Y
     world_integral_saturated = false;
     if (!std::isfinite(Iw_w_[1])) {
       Iw_w_[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!");
     } else if (Iw_w_[1] > kiwxy_lim_) {
       Iw_w_[1]                 = kiwxy_lim_;
       world_integral_saturated = true;
@@ -1189,7 +1198,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     }
 
     if (kiwxy_lim_ >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: SE3's world Y integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: SE3's world Y integral is being saturated!");
     }
   }
 
@@ -1224,7 +1233,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
         Ep_fcu_untilted[0] = res.value().vector.x;
         Ep_fcu_untilted[1] = res.value().vector.y;
       } else {
-        ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: could not transform the position error to fcu_untilted");
+        ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: could not transform the position error to fcu_untilted");
       }
     }
 
@@ -1244,7 +1253,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
         Ev_fcu_untilted[0] = res.value().vector.x;
         Ev_fcu_untilted[1] = res.value().vector.x;
       } else {
-        ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: could not transform the velocity error to fcu_untilted");
+        ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: could not transform the velocity error to fcu_untilted");
       }
     }
 
@@ -1259,7 +1268,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     double body_integral_saturated = false;
     if (!std::isfinite(Ib_b_[0])) {
       Ib_b_[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: NaN detected in variable 'Ib_b_[0]', setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: NaN detected in variable 'Ib_b_[0]', setting it to 0!!!");
     } else if (Ib_b_[0] > kibxy_lim_) {
       Ib_b_[0]                = kibxy_lim_;
       body_integral_saturated = true;
@@ -1269,14 +1278,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     }
 
     if (kibxy_lim_ > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: SE3's body pitch integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: SE3's body pitch integral is being saturated!");
     }
 
     // saturate the body
     body_integral_saturated = false;
     if (!std::isfinite(Ib_b_[1])) {
       Ib_b_[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: NaN detected in variable 'Ib_b_[1]', setting it to 0!!!");
+      ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: NaN detected in variable 'Ib_b_[1]', setting it to 0!!!");
     } else if (Ib_b_[1] > kibxy_lim_) {
       Ib_b_[1]                = kibxy_lim_;
       body_integral_saturated = true;
@@ -1286,7 +1295,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     }
 
     if (kibxy_lim_ > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: SE3's body roll integral is being saturated!");
+      ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: SE3's body roll integral is being saturated!");
     }
   }
 
@@ -1309,7 +1318,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     bool uav_mass_saturated = false;
     if (!std::isfinite(uav_mass_difference_)) {
       uav_mass_difference_ = 0;
-      ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
+      ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
     } else if (uav_mass_difference_ > km_lim_) {
       uav_mass_difference_ = km_lim_;
       uav_mass_saturated   = true;
@@ -1319,7 +1328,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
     }
 
     if (uav_mass_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: The UAV mass difference is being saturated to %.2f!", uav_mass_difference_);
+      ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: The UAV mass difference is being saturated to %.2f!", uav_mass_difference_);
     }
   }
 
@@ -1399,7 +1408,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       t[2] = -constraints.yaw_rate;
     }
   } else {
-    ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: missing dynamics constraints");
+    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: missing dynamics constraints");
   }
 
   // | --------------- fill the resulting command --------------- |
@@ -1422,7 +1431,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
     output_command->mode_mask = output_command->MODE_ATTITUDE;
 
-    ROS_WARN_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: outputting desired orientation (this is not normal)");
+    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsLoadController]: outputting desired orientation (this is not normal)");
   }
 
   output_command->desired_acceleration.x = desired_x_accel;
@@ -1437,7 +1446,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
       rampup_active_         = false;
       output_command->thrust = thrust;
 
-      ROS_INFO("[Se3ControllerBruboticsPm]: rampup finished");
+      ROS_INFO("[Se3BruboticsLoadController]: rampup finished");
 
     } else {
 
@@ -1449,7 +1458,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
       output_command->thrust = rampup_thrust_;
 
-      ROS_INFO_THROTTLE(0.1, "[Se3ControllerBruboticsPm]: ramping up thrust, %.4f", output_command->thrust);
+      ROS_INFO_THROTTLE(0.1, "[Se3BruboticsLoadController]: ramping up thrust, %.4f", output_command->thrust);
     }
 
   } else {
@@ -1472,7 +1481,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
   output_command->controller_enforcing_constraints = false;
 
-  output_command->controller = "Se3ControllerBruboticsPm";
+  output_command->controller = "Se3BruboticsLoadController";
 
   last_attitude_cmd_ = output_command;
 
@@ -1483,7 +1492,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3ControllerBruboticsPm::update(const
 
 /* //{ getStatus() */
 
-const mrs_msgs::ControllerStatus Se3ControllerBruboticsPm::getStatus() {
+const mrs_msgs::ControllerStatus Se3BruboticsLoadController::getStatus() {
 
   mrs_msgs::ControllerStatus controller_status;
 
@@ -1496,9 +1505,9 @@ const mrs_msgs::ControllerStatus Se3ControllerBruboticsPm::getStatus() {
 
 /* switchOdometrySource() //{ */
 
-void Se3ControllerBruboticsPm::switchOdometrySource(const mrs_msgs::UavState::ConstPtr& new_uav_state) {
+void Se3BruboticsLoadController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr& new_uav_state) {
 
-  ROS_INFO("[Se3ControllerBruboticsPm]: switching the odometry source");
+  ROS_INFO("[Se3BruboticsLoadController]: switching the odometry source");
 
   auto uav_state = mrs_lib::get_mutexed(mutex_uav_state_, uav_state_);
 
@@ -1524,7 +1533,7 @@ void Se3ControllerBruboticsPm::switchOdometrySource(const mrs_msgs::UavState::Co
 
   } else {
 
-    ROS_ERROR_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: could not transform world integral to the new frame");
+    ROS_ERROR_THROTTLE(1.0, "[Se3BruboticsLoadController]: could not transform world integral to the new frame");
 
     std::scoped_lock lock(mutex_integrals_);
 
@@ -1537,7 +1546,7 @@ void Se3ControllerBruboticsPm::switchOdometrySource(const mrs_msgs::UavState::Co
 
 /* resetDisturbanceEstimators() //{ */
 
-void Se3ControllerBruboticsPm::resetDisturbanceEstimators(void) {
+void Se3BruboticsLoadController::resetDisturbanceEstimators(void) {
 
   std::scoped_lock lock(mutex_integrals_);
 
@@ -1549,7 +1558,7 @@ void Se3ControllerBruboticsPm::resetDisturbanceEstimators(void) {
 
 /* setConstraints() //{ */
 
-const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3ControllerBruboticsPm::setConstraints([
+const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3BruboticsLoadController::setConstraints([
     [maybe_unused]] const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& constraints) {
 
   if (!is_initialized_) {
@@ -1560,7 +1569,7 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3ControllerBruboticsP
 
   got_constraints_ = true;
 
-  ROS_INFO("[Se3ControllerBruboticsPm]: updating constraints");
+  ROS_INFO("[Se3BruboticsLoadController]: updating constraints");
 
   mrs_msgs::DynamicsConstraintsSrvResponse res;
   res.success = true;
@@ -1578,22 +1587,25 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3ControllerBruboticsP
 //added by Aly + Philippe
 // | ----------------- load subscribtion callback ---------------- |
 
-void Se3ControllerBruboticsPm::loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg) {
+void Se3BruboticsLoadController::loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg) {
   int load_index = -1;
   std::vector<std::string> link_names = loadmsg->name;
-
-  //std::vector<std::string> frame = loadmsg->reference_frame;
-
-  for(size_t i = 0; i < link_names.size(); i++)
-  {
-      if(link_names[i] == "bar::link_01")
-      {
-        load_index = i;
-        payload_spawned = true;
-      }else{
-      }     
+  // to take the link of the correct uav
+  for(size_t i = 0; i < link_names.size(); i++){
+    if (uav_id) // for uav1
+    {
+      if(link_names[i] == "bar::link_04"){
+          load_index = i;
+          payload_spawned = true;
+      }
+    }else { // for uav2
+      if(link_names[i] == "bar::link_01"){
+          load_index = i;
+          payload_spawned = true;
+      }
+    }
   }
-  
+
   load_pose = loadmsg->pose[load_index];
   load_pose_position[0] = load_pose.position.x;
   load_pose_position[1] = load_pose.position.y;
@@ -1608,6 +1620,7 @@ void Se3ControllerBruboticsPm::loadStatesCallback(const gazebo_msgs::LinkStatesC
         load_pose_position[i] = load_pose_position[i];
       }
   }
+  //ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
 
   load_velocity = loadmsg->twist[load_index];
   custom_publisher_load_pose.publish(load_pose);
@@ -1615,13 +1628,13 @@ void Se3ControllerBruboticsPm::loadStatesCallback(const gazebo_msgs::LinkStatesC
   load_lin_vel[0]= load_velocity.linear.x;
   load_lin_vel[1]= load_velocity.linear.y;
   load_lin_vel[2]= load_velocity.linear.z;
+
   //ROS_INFO_STREAM("Position load:" << std::endl << load_pose);
   //ROS_INFO_STREAM("Position:" << std::endl << load_pose_position);
-  //ROS_INFO_STREAM("Bar spawned:" << std::endl << payload_spawned);
 }
 
 // Raph
-void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) {
+void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) {
   int message_id;
   int payload_1;
   int payload_2;
@@ -1635,7 +1648,7 @@ void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr
 
   float encoder_output = (float) combined/ 1000.0;
 
-  //added by Aly
+    //added by Aly
   if (message_id == 24)
   {
     encoder_angle_1 = encoder_output;
@@ -1650,21 +1663,24 @@ void Se3ControllerBruboticsPm::BacaCallback(const mrs_msgs::BacaProtocolConstPtr
     encoder_velocity_2 = encoder_output;
   }
   
-  load_pose_position[0] = cable_length*sin(encoder_angle_1); // x
-  load_pose_position[1] = cable_length*sin(encoder_angle_2); // y
+
+  load_pose_position[0] = cable_length*sin(encoder_angle_1);  // x
+  load_pose_position[1] = cable_length*sin(encoder_angle_2);  // y
   load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2)));
 
   load_lin_vel[0]= encoder_velocity_1*cable_length;
   load_lin_vel[1]= encoder_velocity_2*cable_length;
   load_lin_vel[2]= 0;
-  
+
   //ROS_INFO_STREAM("xxxxxx:" << std::endl << load_pose_position[0]);
   //ROS_INFO_STREAM("yyyyyy:" << std::endl << load_pose_position[1]);
+
+
 }
 
 /* //{ callbackDrs() */
 
-void Se3ControllerBruboticsPm::callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, [[maybe_unused]] uint32_t level) {
+void Se3BruboticsLoadController::callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, [[maybe_unused]] uint32_t level) {
 
   {
     std::scoped_lock lock(mutex_drs_params_, mutex_output_mode_);
@@ -1674,7 +1690,7 @@ void Se3ControllerBruboticsPm::callbackDrs(mrs_uav_controllers::se3_controllerCo
     output_mode_ = config.output_mode;
   }
 
-  ROS_INFO("[Se3ControllerBruboticsPm]: DRS updated gains");
+  ROS_INFO("[Se3BruboticsLoadController]: DRS updated gains");
 }
 
 //}
@@ -1685,7 +1701,7 @@ void Se3ControllerBruboticsPm::callbackDrs(mrs_uav_controllers::se3_controllerCo
 
 /* filterGains() //{ */
 
-void Se3ControllerBruboticsPm::filterGains(const bool mute_gains, const double dt) {
+void Se3BruboticsLoadController::filterGains(const bool mute_gains, const double dt) {
 
   // When muting the gains, we want to bypass the filter,
   // so it happens immediately.
@@ -1747,7 +1763,7 @@ void Se3ControllerBruboticsPm::filterGains(const bool mute_gains, const double d
 
 /* calculateGainChange() //{ */
 
-double Se3ControllerBruboticsPm::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name,
+double Se3BruboticsLoadController::calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name,
                                           bool& updated) {
 
   double change = desired_value - current_value;
@@ -1784,7 +1800,7 @@ double Se3ControllerBruboticsPm::calculateGainChange(const double dt, const doub
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[Se3ControllerBruboticsPm]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(1.0, "[Se3BruboticsLoadController]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
     updated = true;
   }
 
@@ -1793,9 +1809,9 @@ double Se3ControllerBruboticsPm::calculateGainChange(const double dt, const doub
 
 //}
 
-}  // namespace se3_controller_brubotics_pm
+}  // namespace se3_brubotics_load_controller
 
 }  // namespace mrs_uav_controllers
 
 #include <pluginlib/class_list_macros.h>
-PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::se3_controller_brubotics_pm::Se3ControllerBruboticsPm, mrs_uav_managers::Controller)
+PLUGINLIB_EXPORT_CLASS(mrs_uav_controllers::se3_brubotics_load_controller::Se3BruboticsLoadController, mrs_uav_managers::Controller)

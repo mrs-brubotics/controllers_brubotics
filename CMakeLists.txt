@@ -20,6 +20,8 @@ find_package(catkin REQUIRED COMPONENTS
 generate_dynamic_reconfigure_options(
   cfg/se3_brubotics_controller.cfg 
   cfg/se3_copy_controller.cfg
+  cfg/se3_brubotics_load_controller.cfg
+  cfg/se3_brubotics_pm_controller.cfg
   )
 
 set(CMAKE_CXX_STANDARD 17)
@@ -109,35 +111,35 @@ target_link_libraries(Se3BruboticsController
   )
 
 
-  # Se3 controller with load
+  # Se3BruboticsLoadController
 
-add_library(Se3ControllerBruboticsLoad
-  src/se3_controller_brubotics_load/se3_controller_brubotics_load.cpp
+add_library(Se3BruboticsLoadController
+  src/se3_brubotics_load_controller/se3_brubotics_load_controller.cpp
   )
 
-add_dependencies(Se3ControllerBruboticsLoad
+add_dependencies(Se3BruboticsLoadController
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
 
-target_link_libraries(Se3ControllerBruboticsLoad
+target_link_libraries(Se3BruboticsLoadController
   ${catkin_LIBRARIES}
   )
 
-  # Se3 controller with point mass
+  # Se3BruboticsPmController
 
-add_library(Se3ControllerBruboticsPm
-  src/se3_controller_brubotics_pm/se3_controller_brubotics_pm.cpp
+add_library(Se3BruboticsPmController
+  src/se3_brubotics_pm_controller/se3_brubotics_pm_controller.cpp
   )
 
-add_dependencies(Se3ControllerBruboticsPm
+add_dependencies(Se3BruboticsPmController
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
   ${PROJECT_NAME}_gencfg
   )
 
-target_link_libraries(Se3ControllerBruboticsPm
+target_link_libraries(Se3BruboticsPmController
   ${catkin_LIBRARIES}
   )
 
@@ -148,8 +150,8 @@ target_link_libraries(Se3ControllerBruboticsPm
 install(TARGETS
   Se3CopyController
   Se3BruboticsController
-  Se3ControllerBruboticsLoad
-  Se3ControllerBruboticsPm
+  Se3BruboticsLoadController
+  Se3BruboticsPmController
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
