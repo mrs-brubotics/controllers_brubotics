@@ -142,11 +142,6 @@ private:
   float encoder_angle_2;
   float encoder_velocity_1;
   float encoder_velocity_2;
-
-  //merge controller 1 and 2 uavs
-  bool uav_id = false; // false = uav2, true = uav1
-  std::string uav_name;
-  std::string number_of_uav;
   
   // Raph
   ros::Subscriber data_payload_sub;
@@ -505,21 +500,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsPmController::update(const
 
   //added by Aly + Philippe
   uav_name = getenv("UAV_NAME");
-  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
-  // to see how many UAVs there are
-  number_of_uav = getenv("NUMBER_OF_UAV"); // is exported in the session.yaml
-  if (number_of_uav == "2")
-  {
-    // to see which UAV it is
-    if (uav_name == "uav1")
-    {
-      uav_id = true; //uav 1
-    }else{
-      uav_id = false; //uav 2
-    }
-  }
-  //ROS_INFO_STREAM("number_of_uav \n" << number_of_uav );
-  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
 
   if (run_type == "simulation")
   {
@@ -1607,34 +1587,14 @@ void Se3BruboticsPmController::loadStatesCallback(const gazebo_msgs::LinkStatesC
 
   for(size_t i = 0; i < link_names.size(); i++)
   {
-    if (number_of_uav == "2")
-    {
-      if (uav_id) // for uav1
-      {
-        if(link_names[i] == "bar::link_04"){
-            load_index = i;
-            payload_spawned = true;
-            //ROS_INFO_STREAM("number_of_uav \n" << number_of_uav );
-            //ROS_INFO_STREAM("UAV_NAME \n" << uav_name );
-        }
-      }else { // for uav2
-        if(link_names[i] == "bar::link_01"){
-            load_index = i;
-            payload_spawned = true;
-            //ROS_INFO_STREAM("number_of_uav \n" << number_of_uav );
-            //ROS_INFO_STREAM("UAV_NAME \n" << uav_name );
-        }
-      }
-    }else{
-      if(link_names[i] == "bar::link_01")
+   if(link_names[i] == "bar::link_01")
       {
         load_index = i;
         payload_spawned = true;
         //ROS_INFO_STREAM("number_of_uav \n" << number_of_uav );
         //ROS_INFO_STREAM("UAV_NAME \n" << uav_name );
-      }else{
-      }  
-    }   
+    }else{
+    } 
   }
   
   load_pose = loadmsg->pose[load_index];
