@@ -128,7 +128,7 @@ target_link_libraries(Se3BruboticsLoadController
   )
 
   # Se3BruboticsPmController
-
+#[[
 add_library(Se3BruboticsPmController
   src/se3_brubotics_pm_controller/se3_brubotics_pm_controller.cpp
   )
@@ -142,7 +142,7 @@ add_dependencies(Se3BruboticsPmController
 target_link_libraries(Se3BruboticsPmController
   ${catkin_LIBRARIES}
   )
-
+]]
 #############
 ## Install ##
 #############
@@ -151,7 +151,7 @@ install(TARGETS
   Se3CopyController
   Se3BruboticsController
   Se3BruboticsLoadController
-  Se3BruboticsPmController
+  #Se3BruboticsPmController
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
