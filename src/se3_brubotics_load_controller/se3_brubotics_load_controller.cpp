@@ -839,10 +839,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   double total_mass = 0;
   if(payload_spawned){
     total_mass = _uav_mass_ + uav_mass_difference_;
-    ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
+    //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
   }else{
     total_mass = _uav_mass_;
-    ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
+    //ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
   }
   // | --------------------------------- |
 
