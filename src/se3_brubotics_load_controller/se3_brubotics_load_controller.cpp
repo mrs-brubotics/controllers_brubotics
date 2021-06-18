@@ -698,7 +698,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
  
   if (control_reference->use_velocity_horizontal) {
-      Kpl[0] = 7.0;
+      Kpl[0] = 0; //7.0
       Kpl[1] = Kpl[0];
   } else {
       Kpl[0] = 0;
@@ -714,7 +714,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
 
  
   if (control_reference->use_velocity_horizontal) {
-      Kdl[0] = 0.5;
+      Kdl[0] = 0; //0.5
       Kdl[1] = Kdl[0];
   } else {
       Kdl[0] = 0;
