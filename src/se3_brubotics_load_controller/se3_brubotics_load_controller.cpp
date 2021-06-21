@@ -323,12 +323,13 @@ void Se3BruboticsLoadController::initialize(const ros::NodeHandle& parent_nh, [[
 
   // | ----------------- Thesis B ---------------- |
   run_type = getenv("RUN_TYPE");
-  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
+  
   if (run_type == "simulation")
   {
     custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
   }else{
     //publisher for encoders
+    custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
   }
   // | --------------------------------- |
 
@@ -517,17 +518,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
       uav_id = false; //uav 2
     }
   }
-
+  
+  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
+  std::string slash = "/";
+  //ROS_INFO_STREAM("UAV_NAME \n" << run_type  );
   if (run_type == "simulation")
   {
     // subscriber of the simulation
     load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3BruboticsLoadController::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
   }else{
     // subscriber of the encoder
-    data_payload_sub = nh_.subscribe("/uav1/serial/received_message", 1, &Se3BruboticsLoadController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+    //ROS_INFO("HAHAHHAHHOAHOAOAHOAHOAHOAHAOH");
+    data_payload_sub = nh_.subscribe("/nuc3/serial/received_message", 1, &Se3BruboticsLoadController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
   }
   // | --------------------------------- |
-
+  //slash.append(uav_name.append("/serial/received_message"))
   // | ----------------- get the current heading ---------------- |
   double uav_heading = 0;
 
@@ -1685,6 +1690,12 @@ void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstP
   load_pose_position[1] = cable_length*sin(encoder_angle_2); // y
   load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2)));
 
+  load_pose.position.x = load_pose_position[0];
+  load_pose.position.y = load_pose_position[1];
+  load_pose.position.z = load_pose_position[2];
+  
+  ROS_INFO_STREAM("Load Pose \n" << load_pose );
+  
   load_lin_vel[0]= encoder_velocity_1*cable_length;
   load_lin_vel[1]= encoder_velocity_2*cable_length;
   load_lin_vel[2]= 0;
