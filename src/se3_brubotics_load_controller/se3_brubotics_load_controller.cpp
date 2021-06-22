@@ -529,7 +529,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   }else{
     // subscriber of the encoder
     //ROS_INFO("HAHAHHAHHOAHOAOAHOAHOAHOAHAOH");
-    data_payload_sub = nh_.subscribe("/nuc3/serial/received_message", 1, &Se3BruboticsLoadController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+    data_payload_sub = nh_.subscribe(slash.append(uav_name.append("/serial/received_message")), 1, &Se3BruboticsLoadController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
   }
   // | --------------------------------- |
   //slash.append(uav_name.append("/serial/received_message"))
