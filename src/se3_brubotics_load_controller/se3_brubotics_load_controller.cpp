@@ -123,9 +123,13 @@ private:
 
   // | ----------------- Thesis B ---------------- |
   ros::Publisher custom_publisher_load_pose;
+  ros::Publisher custom_publisher_load_pose_error;
+  ros::Publisher custom_publisher_load_velocity_error;
   ros::Subscriber load_state_sub;
   geometry_msgs::Pose load_pose;
   geometry_msgs::Twist load_velocity;
+  geometry_msgs::Vector3 load_pose_error;
+  geometry_msgs::Vector3 load_velocity_error;
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
   Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d load_pose_position = Eigen::Vector3d::Zero(3);
@@ -330,6 +334,8 @@ void Se3BruboticsLoadController::initialize(const ros::NodeHandle& parent_nh, [[
   }else{
     //publisher for encoders
     custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
+    custom_publisher_load_pose_error = nh_.advertise<geometry_msgs::Vector3>("load_pose_error",1);
+    custom_publisher_load_velocity_error = nh_.advertise<geometry_msgs::Vector3>("load_velocity_error",1);
   }
   // | --------------------------------- |
 
@@ -508,17 +514,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   uav_name = getenv("UAV_NAME");
   // to see how many UAVs there are
   number_of_uav = getenv("NUMBER_OF_UAV"); // is exported in the session.yaml
-  if (number_of_uav == "2")
-  {
-    // to see which UAV it is
-    if (uav_name == "uav1")
+  
+  
+  if (run_type == "simulation"){
+    if (number_of_uav == "2")
     {
-      uav_id = true; //uav 1
-    }else{
-      uav_id = false; //uav 2
+      // to see which UAV it is
+      if (uav_name == "uav1")
+      {
+        uav_id = true; //uav 1
+      }else{
+        uav_id = false; //uav 2
+      }
     }
   }
-  
+
   //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
   std::string slash = "/";
   //ROS_INFO_STREAM("UAV_NAME \n" << run_type  );
@@ -528,11 +538,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3BruboticsLoadController::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
   }else{
     // subscriber of the encoder
-    //ROS_INFO("HAHAHHAHHOAHOAOAHOAHOAHOAHAOH");
     data_payload_sub = nh_.subscribe(slash.append(uav_name.append("/serial/received_message")), 1, &Se3BruboticsLoadController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
   }
   // | --------------------------------- |
-  //slash.append(uav_name.append("/serial/received_message"))
+  
   // | ----------------- get the current heading ---------------- |
   double uav_heading = 0;
 
@@ -662,20 +671,34 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
 
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
       Epl = Rpl - Opl - load_pose_position_offset; // remove offset because the because load does not spawn perfectly under drone
+      //(position relative to base frame)
     }
 
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
       Evl = Rv - Ovl;
+      //(speed relative to base frame)
     }
   }else{
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-      Epl = Opl; // since encoder gives offset from drone position
+      Epl = -Opl; // since encoder gives offset from drone position (position relative to drone)
+
     }
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
-      Evl = Rv - Ovl;
+      Evl = -Ovl; // if encoders don't move, there is no speed (speed relative to drone)
     }
+    load_pose_error.x = -Epl[0];
+    load_pose_error.y = -Epl[1];
+    load_pose_error.z = -Epl[2];
+
+    load_velocity_error.x = -Evl[0];
+    load_velocity_error.y = -Evl[1];
+    load_velocity_error.z = -Evl[2];
+    
+    custom_publisher_load_pose_error.publish(load_pose_error);
+    custom_publisher_load_velocity_error.publish(load_velocity_error);
+
   }
   
   // 1e method pandolfo
@@ -842,12 +865,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   
   // | ----------------- Thesis B ---------------- |
   double total_mass = 0;
-  if(payload_spawned){
-    total_mass = _uav_mass_ + uav_mass_difference_;
-    //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
+  if (run_type == "simulation"){ 
+    if(payload_spawned){
+      total_mass = _uav_mass_ + uav_mass_difference_;
+      //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
+    }else{
+      total_mass = _uav_mass_;
+      //ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
+    }
   }else{
-    total_mass = _uav_mass_;
-    //ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
+    total_mass = _uav_mass_ + uav_mass_difference_;
   }
   // | --------------------------------- |
 
