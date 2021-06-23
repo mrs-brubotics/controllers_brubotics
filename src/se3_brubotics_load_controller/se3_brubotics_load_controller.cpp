@@ -670,7 +670,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     }
 
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-      Epl = Rpl - Opl - load_pose_position_offset; // remove offset because the because load does not spawn perfectly under drone
+      Epl = Rpl - Opl - load_pose_position_offset; // remove offset because the load does not spawn perfectly under drone
       //(position relative to base frame)
     }
 
@@ -813,20 +813,31 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
 
   // | ----------------- Thesis B ---------------- |
   uav_mass_difference_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
-  // | --------------------------------- |
-  
+
+  double total_mass = 0;
+  if (run_type == "simulation"){ 
+    if(payload_spawned){
+      total_mass = _uav_mass_ + uav_mass_difference_;
+      //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
+    }else{
+      total_mass = _uav_mass_;
+      //ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
+    }
+  }else{
+    total_mass = _uav_mass_ + uav_mass_difference_;
+  }
   //ROS_INFO_STREAM("Se3BruboticsLoadController: Mass load = \n" << uav_mass_difference_);
   //uav_mass_difference_ = 0.25; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  Kp = Kp * (_uav_mass_ + uav_mass_difference_);
-  Kv = Kv * (_uav_mass_ + uav_mass_difference_);
+  Kp = Kp * total_mass;
+  Kv = Kv * total_mass;
   
   // | ----------------- Thesis B ---------------- |
   // 1e method pandolfo
   //Klv = Klv *(_uav_mass_ + uav_mass_difference_);
 
   //2e method pandolfo
-  Kpl = Kpl *(_uav_mass_ + uav_mass_difference_);
-  Kdl = Kdl *(_uav_mass_ + uav_mass_difference_);
+  Kpl = Kpl *total_mass;
+  Kdl = Kdl *total_mass;
   // | --------------------------------- |
 
   // a print to test if the gains change so you know where to change:
@@ -863,19 +874,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
 
   // construct the desired force vector
   
-  // | ----------------- Thesis B ---------------- |
-  double total_mass = 0;
-  if (run_type == "simulation"){ 
-    if(payload_spawned){
-      total_mass = _uav_mass_ + uav_mass_difference_;
-      //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
-    }else{
-      total_mass = _uav_mass_;
-      //ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
-    }
-  }else{
-    total_mass = _uav_mass_ + uav_mass_difference_;
-  }
+
   // | --------------------------------- |
 
   // Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, _g_) + Ra);
@@ -1092,7 +1091,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   // ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
   // double hover_thrust = total_mass*_g_; use this as most correct if total_mass used in control
   std_msgs::Float64 hover_thrust;
-  hover_thrust.data = _uav_mass_*common_handlers_->g;
+  hover_thrust.data = total_mass*common_handlers_->g;
   // publish these so you have them in matlab
   pub_thrust_satlimit_physical_.publish(thrust_saturation_physical);
   pub_thrust_satlimit_.publish(_thrust_saturation_);
