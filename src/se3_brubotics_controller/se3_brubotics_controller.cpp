@@ -129,7 +129,7 @@ private:
   // | ------------ controller limits and saturations ----------- |
   bool _tilt_angle_failsafe_enabled_;
   double _tilt_angle_failsafe_;
-  double _thrust_saturation_;
+  std_msgs::Float64 _thrust_saturation_;
 
   // | ------------------ activation and output ----------------- |
 
@@ -237,7 +237,7 @@ void Se3BruboticsController::initialize(const ros::NodeHandle& parent_nh, [[mayb
     ROS_ERROR("[Se3BruboticsController]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
     ros::shutdown();
   }
-  param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_);
+  param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_.data);
 
   // gain filtering
   param_loader.loadParam("gains_filter/perc_change_rate", _gains_filter_change_rate_);
@@ -673,20 +673,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
   Eigen::Vector3d f_norm = f.normalized();
 
   // calculate the force in spherical coordinates
-  double theta = acos(f_norm[2]);
+  std_msgs::Float64 theta; 
+  theta.data = acos(f_norm[2]);
   double phi   = atan2(f_norm[1], f_norm[0]);
 
   // check for the failsafe limit
-  if (!std::isfinite(theta)) {
+  if (!std::isfinite(theta.data)) {
 
     ROS_ERROR("[Se3BruboticsController]: NaN detected in variable 'theta', returning null");
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
 
-  if (_tilt_angle_failsafe_enabled_ && theta > _tilt_angle_failsafe_) {
+  if (_tilt_angle_failsafe_enabled_ && theta.data > _tilt_angle_failsafe_) {
 
-    ROS_ERROR("[Se3BruboticsController]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta,
+    ROS_ERROR("[Se3BruboticsController]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta.data,
               (180.0 / M_PI) * _tilt_angle_failsafe_);
     ROS_INFO("[Se3BruboticsController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
     ROS_INFO("[Se3BruboticsController]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
@@ -704,16 +705,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
 
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
-  if (fabs(constraints.tilt) > 1e-3 && theta > constraints.tilt) {
-    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta / M_PI) * 180.0,
+  if (fabs(constraints.tilt) > 1e-3 && theta.data > constraints.tilt) {
+    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta.data / M_PI) * 180.0,
                       (constraints.tilt / M_PI) * 180.0);
-    theta = constraints.tilt;
+    theta.data = constraints.tilt;
   }
 
   // reconstruct the vector
-  f_norm[0] = sin(theta) * cos(phi);
-  f_norm[1] = sin(theta) * sin(phi);
-  f_norm[2] = cos(theta);
+  f_norm[0] = sin(theta.data) * cos(phi);
+  f_norm[1] = sin(theta.data) * sin(phi);
+  f_norm[2] = cos(theta.data);
 
   // publish the tilt angle
   pub_tilt_angle_.publish(theta);
@@ -807,32 +808,36 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
   // clang-format on
 
   /* output */
-  double thrust_force = f.dot(R.col(2));
+  std_msgs::Float64 thrust_force; 
+  thrust_force.data = f.dot(R.col(2));
   double thrust = 0;
 
   //custom publisher
   custom_publisher_projected_thrust_.publish(thrust_force);
-  double thrust_norm=sqrt(f(0,0)*f(0,0)+f(1,0)*f(1,0)+f(2,0)*f(2,0)); // norm of f ( not projected on the z axis of the UAV frame)
+  std_msgs::Float64 thrust_norm;
+  thrust_norm.data =sqrt(f(0,0)*f(0,0)+f(1,0)*f(1,0)+f(2,0)*f(2,0)); // norm of f ( not projected on the z axis of the UAV frame)
   custom_publisher_thrust_.publish(thrust_norm);
   // print _motor_params_.A and _motor_params_.B
   // ROS_INFO_STREAM("_motor_params_.A = \n" << _motor_params_.A);
   // ROS_INFO_STREAM("_motor_params_.B = \n" << _motor_params_.B);
   // ROS_INFO_STREAM("_thrust_saturation_ = \n" << _thrust_saturation_);
   // OLD double thrust_saturation_physical = pow((_thrust_saturation_-_motor_params_.B)/_motor_params_.A, 2);
-  double thrust_saturation_physical = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, _thrust_saturation_);
+  std_msgs::Float64 thrust_saturation_physical;
+  thrust_saturation_physical.data = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, _thrust_saturation_.data);
   // ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
   // double hover_thrust = total_mass*_g_; use this as most correct if total_mass used in control
-  double hover_thrust = _uav_mass_*common_handlers_->g;
+  std_msgs::Float64 hover_thrust;
+  hover_thrust.data = _uav_mass_*common_handlers_->g;
   // publish these so you have them in matlab
   pub_thrust_satlimit_physical_.publish(thrust_saturation_physical);
   pub_thrust_satlimit_.publish(_thrust_saturation_);
   pub_hover_thrust_.publish(hover_thrust);
   if (!control_reference->use_thrust) {
-    if (thrust_force >= 0) {
+    if (thrust_force.data >= 0) {
       // OLD thrust = sqrt(thrust_force) * _motor_params_.A + _motor_params_.B;
-      thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force);
+      thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force.data);
     } else {
-      ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: just so you know, the desired thrust force is negative (%.2f)", thrust_force);
+      ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: just so you know, the desired thrust force is negative (%.2f)", thrust_force.data);
     }
   }
   else {
@@ -846,10 +851,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
     thrust = 0;
     ROS_ERROR("[Se3BruboticsController]: NaN detected in variable 'thrust', setting it to 0 and returning!!!");
 
-  } else if (thrust > _thrust_saturation_) {
+  } else if (thrust > _thrust_saturation_.data) {
 
-    thrust = _thrust_saturation_;
-    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: saturating thrust to %.2f", _thrust_saturation_);
+    thrust = _thrust_saturation_.data;
+    ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: saturating thrust to %.2f", _thrust_saturation_.data);
 
   } else if (thrust < 0.0) {
 
@@ -858,7 +863,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
   }
 
   // old double thrust_physical_saturated = pow((thrust-_motor_params_.B)/_motor_params_.A, 2);
-  double thrust_physical_saturated = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, thrust);
+  std_msgs::Float64 thrust_physical_saturated;
+  thrust_physical_saturated.data = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, thrust);
   //ROS_INFO_STREAM("thrust_physical_saturated = \n" << thrust_physical_saturated);
   pub_thrust_satval_.publish(thrust_physical_saturated);
 
@@ -890,7 +896,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
     Eigen::Matrix3d I;
     I << 0, 1, 0, -1, 0, 0, 0, 0, 0;
     Eigen::Vector3d desired_jerk = Eigen::Vector3d(control_reference->jerk.x, control_reference->jerk.y, control_reference->jerk.z);
-    q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (thrust_force / total_mass);
+    q_feedforward                = (I.transpose() * Rd.transpose() * desired_jerk) / (thrust_force.data / total_mass);
   }
 
   // angular feedback + angular rate feedforward
@@ -1128,7 +1134,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
   {
     Eigen::Matrix3d des_orientation_bryan = Rd;
     Eigen::Matrix3d des_orientation = mrs_lib::AttitudeConverter(Rd);
-    Eigen::Vector3d thrust_vector   = thrust_force * des_orientation.col(2);
+    Eigen::Vector3d thrust_vector   = thrust_force.data * des_orientation.col(2);
     // ROS_INFO_STREAM("Rd = \n" << Rd);
     // ROS_INFO_STREAM("des_orientation = \n" << des_orientation);
     // ROS_INFO_STREAM("des_orientation_bryan = \n" << des_orientation_bryan);
