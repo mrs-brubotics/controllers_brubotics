@@ -1,3 +1,6 @@
+% copy from https://github.com/ctu-mrs/uav_core/blob/master/miscellaneous/thrust_constants/motor_thrust_curve_estimation/readytosky_2312_920kv_8045.m
+% but changed propellor to Aliexpress plastic 9450 self-tightening
+% propeller of https://ctu-mrs.github.io/docs/hardware/motor_tests.html
 % computes ka and kb from two-point measured thrust
 
 % masses of UAV

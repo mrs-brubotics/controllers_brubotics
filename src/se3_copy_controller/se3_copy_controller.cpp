@@ -419,6 +419,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
   
+  ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.n_motors = \n" << common_handlers_->motor_params.n_motors);
+  ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.A = \n" << common_handlers_->motor_params.A);
+  ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.B = \n" << common_handlers_->motor_params.B);
   // | -------------------- calculate the dt -------------------- |
 
   double dt;
