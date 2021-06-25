@@ -491,7 +491,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_attitude_cmd_));
 
   } else {
-
+    ROS_INFO("[Se3BruboticsLoadController]: second iteration");
     dt                = (uav_state->header.stamp - last_update_time_).toSec();
     last_update_time_ = uav_state->header.stamp;
   }
@@ -509,14 +509,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_attitude_cmd_));
     }
   }
-
   // | ----------------- Thesis B ---------------- |
   uav_name = getenv("UAV_NAME");
   // to see how many UAVs there are
-  number_of_uav = getenv("NUMBER_OF_UAV"); // is exported in the session.yaml
-  
-  
+   
   if (run_type == "simulation"){
+    number_of_uav = getenv("NUMBER_OF_UAV"); // is exported in the session.yaml
     if (number_of_uav == "2")
     {
       // to see which UAV it is
@@ -528,7 +526,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
       }
     }
   }
-
   //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
   std::string slash = "/";
   //ROS_INFO_STREAM("UAV_NAME \n" << run_type  );
@@ -538,7 +535,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3BruboticsLoadController::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
   }else{
     // subscriber of the encoder
-    data_payload_sub = nh_.subscribe(slash.append(uav_name.append("/serial/received_message")), 1, &Se3BruboticsLoadController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+    data_payload_sub = nh_.subscribe("/nuc4/serial/received_message", 1, &Se3BruboticsLoadController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
+    //slash.append(uav_name.append("/serial/received_message"))
   }
   // | --------------------------------- |
   
@@ -904,7 +902,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   Eigen::Vector3d velocity_load_feedback = -Kdl * Evl.array();
   // | --------------------------------- | 
 
-
   {
     std::scoped_lock lock(mutex_integrals_);
 
@@ -920,7 +917,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   // | ----------------- Thesis B ---------------- | 
   Eigen::Vector3d f = position_load_feedback + velocity_load_feedback + position_feedback + velocity_feedback + total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g));// custom 2 //add velocity_load_feedback if load transortation
   // | --------------------------------- | 
-  
   //ROS_INFO_STREAM("Se3BruboticsLoadController: _g_ + or -?= \n" << _g_);
   // also check line above uav_mass_difference_ = 0!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
@@ -1697,7 +1693,6 @@ void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstP
 
 
   float encoder_output = (float) combined/ 1000.0;
-
   if (message_id == 24)
   {
     encoder_angle_1 = encoder_output;
@@ -1711,7 +1706,6 @@ void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstP
   {
     encoder_velocity_2 = encoder_output;
   }
-  
   load_pose_position[0] = cable_length*sin(encoder_angle_1); // x
   load_pose_position[1] = cable_length*sin(encoder_angle_2); // y
   load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2)));
@@ -1720,12 +1714,11 @@ void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstP
   load_pose.position.y = load_pose_position[1];
   load_pose.position.z = load_pose_position[2];
   
-  ROS_INFO_STREAM("Load Pose \n" << load_pose );
+  //ROS_INFO_STREAM("Load Pose \n" << load_pose );
   
   load_lin_vel[0]= encoder_velocity_1*cable_length;
   load_lin_vel[1]= encoder_velocity_2*cable_length;
   load_lin_vel[2]= 0;
-  
 }
 // | ---------------------------------- | 
 
