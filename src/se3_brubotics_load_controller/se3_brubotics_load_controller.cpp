@@ -135,6 +135,7 @@ private:
   Eigen::Vector3d load_pose_position = Eigen::Vector3d::Zero(3);
   bool payload_spawned = false;
   bool remove_offset = true;
+  std::string load_gains_switch;
   Eigen::Vector3d load_pose_position_offset = Eigen::Vector3d::Zero(3);
   std::string run_type;
   double cable_length;
@@ -327,6 +328,7 @@ void Se3BruboticsLoadController::initialize(const ros::NodeHandle& parent_nh, [[
 
   // | ----------------- Thesis B ---------------- |
   run_type = getenv("RUN_TYPE");
+  
   
   if (run_type == "simulation")
   {
@@ -720,13 +722,47 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   // 2e method pandolfo
   Eigen::Array3d  Kpl = Eigen::Array3d::Zero(3); 
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
- 
-  if (control_reference->use_velocity_horizontal) {
+  load_gains_switch = getenv("LOAD_GAIN_SWITCH");
+
+  if (load_gains_switch == "true"){ 
+    // gains activated
+    if (control_reference->use_velocity_horizontal) {
+      // gains activated
       Kpl[0] = 7.0; //7.0
       Kpl[1] = Kpl[0];
-  } else {
+    } else {
       Kpl[0] = 0;
       Kpl[1] = 0;
+    }
+
+    if (control_reference->use_velocity_horizontal) {
+      Kdl[0] = 0.5; //0.5
+      Kdl[1] = Kdl[0];
+    } else {
+      Kdl[0] = 0;
+      Kdl[1] = 0;
+    }
+
+    //ROS_INFO_STREAM("gains" << std::endl << "activated");
+  }else{
+    // gains desactivated
+    if (control_reference->use_velocity_horizontal) {
+      Kpl[0] = 0.0; //7.0
+      Kpl[1] = Kpl[0];
+    } else {
+      Kpl[0] = 0;
+      Kpl[1] = 0;
+    }
+
+    if (control_reference->use_velocity_horizontal) {
+      Kdl[0] = 0.0; //0.5
+      Kdl[1] = Kdl[0];
+    } else {
+      Kdl[0] = 0;
+      Kdl[1] = 0;
+    }
+
+    //ROS_INFO_STREAM("gains" << std::endl << "desactivated");
   }
 
   if (control_reference->use_velocity_vertical) {
@@ -734,15 +770,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   } 
   else {
     Kpl[2] = 0;
-  }
-
- 
-  if (control_reference->use_velocity_horizontal) {
-      Kdl[0] = 0.5; //0.5
-      Kdl[1] = Kdl[0];
-  } else {
-      Kdl[0] = 0;
-      Kdl[1] = 0;
   }
 
   if (control_reference->use_velocity_vertical) {
