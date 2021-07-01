@@ -133,6 +133,7 @@ private:
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
   Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d load_pose_position = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
   bool payload_spawned = false;
   bool remove_offset = true;
   std::string load_gains_switch;
@@ -143,6 +144,7 @@ private:
   float encoder_angle_2;
   float encoder_velocity_1;
   float encoder_velocity_2;
+  double uav_heading;
 
   //merge controller 1 and 2 uavs
   bool uav_id = false; // false = uav2, true = uav1
@@ -541,7 +543,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   // | --------------------------------- |
 
   // | ----------------- get the current heading ---------------- |
-  double uav_heading = 0;
+  uav_heading = 0;
 
   try {
     uav_heading = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeading();
@@ -696,6 +698,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     
     custom_publisher_load_pose_error.publish(load_pose_error);
     custom_publisher_load_velocity_error.publish(load_velocity_error);
+
+    ROS_INFO_STREAM("Se3BruboticsLoadController: Opl (load relative to drone) = \n" << Opl );
 
   }
   
@@ -1686,6 +1690,8 @@ void Se3BruboticsLoadController::loadStatesCallback(const gazebo_msgs::LinkState
   load_pose_position[1] = load_pose.position.y;
   load_pose_position[2] = load_pose.position.z;
 
+  //ROS_INFO_STREAM("Load Pose \n" << load_pose );
+
   for (int i = 0; i < 3; i++) // to set it to zero when the load hasn't spawn yet
   {
       if (load_pose_position[i] > 1000)
@@ -1731,9 +1737,14 @@ void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstP
   {
     encoder_velocity_2 = encoder_output;
   }
-  load_pose_position[0] = cable_length*sin(encoder_angle_1); // x
-  load_pose_position[1] = cable_length*sin(encoder_angle_2); // y
-  load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2)));
+
+  rel_load_pose_position[0] = cable_length*sin(encoder_angle_1); // x relative to drone in drone coordinate (turns with uav_heading)
+  rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
+  rel_load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
+
+  load_pose_position[0] = rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading); // x relative to drone in absolute coordinate
+  load_pose_position[1] = -(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading)); // y relative to drone in absolute coordinate
+  load_pose_position[2] = rel_load_pose_position[2]; // z relative to drone in absolute coordinate
 
   load_pose.position.x = load_pose_position[0];
   load_pose.position.y = load_pose_position[1];
