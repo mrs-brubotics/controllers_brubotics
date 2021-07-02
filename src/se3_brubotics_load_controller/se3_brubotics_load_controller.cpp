@@ -837,6 +837,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
 
    // | ----------------- Thesis B ---------------- |
   load_mass_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
+  uav_mass_difference_ = 0; 
 
   double total_mass = 0;
   if (run_type == "simulation"){ 
@@ -852,7 +853,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   }
 
   //ROS_INFO_STREAM("Se3BruboticsLoadController: total mass = \n" << total_mass );
-  //uav_mass_difference_ = 0.25; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   Kp = Kp * total_mass;
   Kv = Kv * total_mass;
   

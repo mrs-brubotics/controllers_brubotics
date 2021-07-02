@@ -89,8 +89,9 @@ private:
 
   // | ---------- thrust generation and mass estimation --------- |
 
-  double                        _uav_mass_;
-  double                        uav_mass_difference_;
+  double _uav_mass_;
+  double uav_mass_difference_;
+  double load_mass_;
 
   // gains that are used and already filtered
   double kpxy_;       // position xy gain
@@ -133,6 +134,7 @@ private:
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
   Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d load_pose_position = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
   bool payload_spawned = false;
   bool remove_offset = true;
   std::string load_gains_switch;
@@ -744,7 +746,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
       Kdl[1] = 0;
     }
 
-    ROS_INFO_STREAM("gains" << std::endl << "activated");
+    //ROS_INFO_STREAM("gains" << std::endl << "activated");
   }else{
     // gains desactivated
     if (control_reference->use_velocity_horizontal) {
@@ -763,7 +765,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
       Kdl[1] = 0;
     }
 
-    ROS_INFO_STREAM("gains" << std::endl << "desactivated");
+    //ROS_INFO_STREAM("gains" << std::endl << "desactivated");
   }
 
   if (control_reference->use_velocity_vertical) {
@@ -836,22 +838,23 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
 
 
   // | ----------------- Thesis B ---------------- |
-  uav_mass_difference_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
+  load_mass_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
+  uav_mass_difference_ = 0; 
 
   double total_mass = 0;
   if (run_type == "simulation"){ 
     if(payload_spawned){
-      total_mass = _uav_mass_ + uav_mass_difference_;
+      total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;
       //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
     }else{
-      total_mass = _uav_mass_;
+      total_mass = _uav_mass_ + uav_mass_difference_ ;
       //ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
     }
   }else{
-    total_mass = _uav_mass_ + uav_mass_difference_;
+    total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;
   }
-  //ROS_INFO_STREAM("Se3BruboticsLoadController: Mass load = \n" << uav_mass_difference_);
-  //uav_mass_difference_ = 0.25; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+  //ROS_INFO_STREAM("Se3BruboticsLoadController: total mass = \n" << total_mass );
   Kp = Kp * total_mass;
   Kv = Kv * total_mass;
   
@@ -1732,9 +1735,14 @@ void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstP
   {
     encoder_velocity_2 = encoder_output;
   }
-  load_pose_position[0] = cable_length*sin(encoder_angle_1); // x
-  load_pose_position[1] = cable_length*sin(encoder_angle_2); // y
-  load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2)));
+
+  rel_load_pose_position[0] = cable_length*sin(encoder_angle_1); // x relative to drone in drone coordinate (turns with uav_heading)
+  rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
+  rel_load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
+
+  load_pose_position[0] = rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading); // x relative to drone in absolute coordinate
+  load_pose_position[1] = -(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading)); // y relative to drone in absolute coordinate
+  load_pose_position[2] = rel_load_pose_position[2]; // z relative to drone in absolute coordinate
 
   load_pose.position.x = load_pose_position[0];
   load_pose.position.y = load_pose_position[1];
