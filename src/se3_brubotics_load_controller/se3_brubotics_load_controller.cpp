@@ -1740,7 +1740,7 @@ void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstP
 
   rel_load_pose_position[0] = cable_length*sin(encoder_angle_1); // x relative to drone in drone coordinate (turns with uav_heading)
   rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
-  rel_load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
+  rel_load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(rel_load_pose_position[0],2) + pow(rel_load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
 
   load_pose_position[0] = rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading); // x relative to drone in absolute coordinate
   load_pose_position[1] = -(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading)); // y relative to drone in absolute coordinate
