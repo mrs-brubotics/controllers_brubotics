@@ -123,6 +123,7 @@ private:
 
   // | ----------------- Thesis B ---------------- |
   ros::Publisher custom_publisher_load_pose;
+  ros::Publisher custom_publisher_load_pose_experiments;
   ros::Publisher custom_publisher_load_pose_error;
   ros::Publisher custom_publisher_load_velocity_error;
   ros::Subscriber load_state_sub;
@@ -132,8 +133,9 @@ private:
   geometry_msgs::Vector3 load_velocity_error;
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
   Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
-  Eigen::Vector3d load_pose_position = Eigen::Vector3d::Zero(3);
+  geometry_msgs::Vector3 load_pose_position;
   Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
   bool payload_spawned = false;
   bool remove_offset = true;
   std::string load_gains_switch;
@@ -337,7 +339,7 @@ void Se3BruboticsLoadController::initialize(const ros::NodeHandle& parent_nh, [[
     custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
   }else{
     //publisher for encoders
-    custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
+    custom_publisher_load_pose_experiments   = nh_.advertise<geometry_msgs::Vector3>("load_pose_position",1);
     custom_publisher_load_pose_error = nh_.advertise<geometry_msgs::Vector3>("load_pose_error",1);
     custom_publisher_load_velocity_error = nh_.advertise<geometry_msgs::Vector3>("load_velocity_error",1);
   }
@@ -641,7 +643,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
 
   // Opl - position load in global frame
   // Ovl - velocity load in global frame
-  Eigen::Vector3d Opl(load_pose_position[0], load_pose_position[1], load_pose_position[2]);
+
+  Eigen::Vector3d Opl(load_pose_position.x, load_pose_position.y, load_pose_position.z);
   Eigen::Vector3d Ovl(load_lin_vel[0], load_lin_vel[1], load_lin_vel[2]);
   Eigen::Vector3d Epl = Eigen::Vector3d::Zero(3); // Load position control error
   Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3); // Load velocity control error
@@ -680,9 +683,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
       //(speed relative to base frame)
     }
   }else{
-    if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-      Epl = -Opl; // since encoder gives offset from drone position (position relative to drone)
+    
+    load_pose_position.x = Op[0] + Difference_load_drone_position[0];
+    load_pose_position.y = Op[1] + Difference_load_drone_position[1];
+    load_pose_position.z = Op[2] + Difference_load_drone_position[2];
 
+    if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
+      Epl[0] = Rpl[0] - load_pose_position.x; // since encoder gives offset from drone position (position relative to drone)
+      Epl[1] = Rpl[1] - load_pose_position.y;
+      Epl[2] = Rpl[2] - load_pose_position.z;
     }
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
@@ -695,6 +704,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     load_velocity_error.x = -Evl[0];
     load_velocity_error.y = -Evl[1];
     load_velocity_error.z = -Evl[2];
+
+    custom_publisher_load_pose_experiments.publish(load_pose_position);
     
     custom_publisher_load_pose_error.publish(load_pose_error);
     custom_publisher_load_velocity_error.publish(load_velocity_error);
@@ -1686,21 +1697,34 @@ void Se3BruboticsLoadController::loadStatesCallback(const gazebo_msgs::LinkState
   }
   
   load_pose = loadmsg->pose[load_index];
-  load_pose_position[0] = load_pose.position.x;
-  load_pose_position[1] = load_pose.position.y;
-  load_pose_position[2] = load_pose.position.z;
+  load_pose_position.x = load_pose.position.x;
+  load_pose_position.y = load_pose.position.y;
+  load_pose_position.z = load_pose.position.z;
 
   //ROS_INFO_STREAM("Load Pose \n" << load_pose );
 
-  for (int i = 0; i < 3; i++) // to set it to zero when the load hasn't spawn yet
-  {
-      if (load_pose_position[i] > 1000)
+  // for (int i = 0; i < 3; i++) // to set it to zero when the load hasn't spawn yet
+  // {
+  //     if (load_pose_position[i] > 1000)
+  //     {
+  //       load_pose_position[i] = 0;
+  //     } else {
+  //       load_pose_position[i] = load_pose_position[i];
+  //     }
+  // }
+
+  if (load_pose_position.x > 1000)
       {
-        load_pose_position[i] = 0;
-      } else {
-        load_pose_position[i] = load_pose_position[i];
+        load_pose_position.x = 0;
       }
-  }
+  if (load_pose_position.y > 1000)
+      {
+        load_pose_position.y = 0;
+      }
+  if (load_pose_position.z > 1000)
+      {
+        load_pose_position.z = 0;
+      }
 
   load_velocity = loadmsg->twist[load_index];
   custom_publisher_load_pose.publish(load_pose);
@@ -1740,15 +1764,15 @@ void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstP
 
   rel_load_pose_position[0] = cable_length*sin(encoder_angle_1); // x relative to drone in drone coordinate (turns with uav_heading)
   rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
-  rel_load_pose_position[2] = sqrt(pow(cable_length,2) - (pow(load_pose_position[0],2) + pow(load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
+  rel_load_pose_position[2] = -sqrt(pow(cable_length,2) - (pow(rel_load_pose_position[0],2) + pow(rel_load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
 
-  load_pose_position[0] = rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading); // x relative to drone in absolute coordinate
-  load_pose_position[1] = -(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading)); // y relative to drone in absolute coordinate
-  load_pose_position[2] = rel_load_pose_position[2]; // z relative to drone in absolute coordinate
+  Difference_load_drone_position[0] = (rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading)); // x relative to drone in absolute coordinate
+  Difference_load_drone_position[1] = (-(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading))); // y relative to drone in absolute coordinate
+  Difference_load_drone_position[2] = (rel_load_pose_position[2]); // z relative to drone in absolute coordinate
 
-  load_pose.position.x = load_pose_position[0];
-  load_pose.position.y = load_pose_position[1];
-  load_pose.position.z = load_pose_position[2];
+  //load_pose.position.x = load_pose_position[0];
+  //load_pose.position.y = load_pose_position[1];
+  //load_pose.position.z = load_pose_position[2];
   
   //ROS_INFO_STREAM("Load Pose \n" << load_pose );
   
