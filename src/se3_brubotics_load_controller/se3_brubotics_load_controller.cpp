@@ -650,19 +650,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3); // Load velocity control error
   cable_length = std::stod(getenv("CABLE_LENGTH")); // is changed inside session.yml to take length cable into account! stod to transform string defined in session to double.
 
+  if (control_reference->use_position_vertical || control_reference->use_position_horizontal) {
+
+    if (control_reference->use_position_horizontal) {
+      Rpl[0] = control_reference->position.x;
+      Rpl[1] = control_reference->position.y;
+    } 
+
+    if (control_reference->use_position_vertical) {
+      Rpl[2] = control_reference->position.z - cable_length;
+    } 
+  }
+
   if (run_type == "simulation"){
 
-    if (control_reference->use_position_vertical || control_reference->use_position_horizontal) {
 
-      if (control_reference->use_position_horizontal) {
-        Rpl[0] = control_reference->position.x;
-        Rpl[1] = control_reference->position.y;
-      } 
-
-      if (control_reference->use_position_vertical) {
-        Rpl[2] = control_reference->position.z - cable_length;
-      } 
-    }
 
     if(payload_spawned){
       if(remove_offset){
@@ -710,7 +712,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     custom_publisher_load_pose_error.publish(load_pose_error);
     custom_publisher_load_velocity_error.publish(load_velocity_error);
 
-    ROS_INFO_STREAM("Se3BruboticsLoadController: Opl (load relative to drone) = \n" << Opl );
+    ROS_INFO_STREAM("Se3BruboticsLoadController: Load_pose_position = \n" << load_pose_position);
+    ROS_INFO_STREAM("Se3BruboticsLoadController: Epl (Rpl-load_pose)= \n" << Epl);
 
   }
   
