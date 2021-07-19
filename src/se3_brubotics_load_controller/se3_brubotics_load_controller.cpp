@@ -672,7 +672,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     }
 
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-      Epl = Op - Opl - load_pose_position_offset; // remove offset because the load does not spawn perfectly under drone
+      Epl = Rp - Opl - load_pose_position_offset; // remove offset because the load does not spawn perfectly under drone
       //(position relative to base frame)
     }
 
