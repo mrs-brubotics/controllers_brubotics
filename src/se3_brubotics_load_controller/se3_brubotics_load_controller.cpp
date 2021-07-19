@@ -663,25 +663,22 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
   }
 
   if (run_type == "simulation"){
-
-
-
     if(payload_spawned){
       if(remove_offset){
-        Epl = Rpl - Opl;
+        Epl = Rp - Opl; //Op - Opl is super unstable!!
         load_pose_position_offset = Epl;
         remove_offset = false;
       } 
     }
 
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-      Epl = Rpl - Opl - load_pose_position_offset; // remove offset because the load does not spawn perfectly under drone
+      Epl = Op - Opl - load_pose_position_offset; // remove offset because the load does not spawn perfectly under drone
       //(position relative to base frame)
     }
 
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
-      Evl = Rv - Ovl;
+      Evl = Ov - Ovl;
       //(speed relative to base frame)
     }
   }else{
@@ -691,9 +688,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     load_pose_position.z = Op[2] + Difference_load_drone_position[2];
 
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-      Epl[0] = Rpl[0] - load_pose_position.x; // since encoder gives offset from drone position (position relative to drone)
-      Epl[1] = Rpl[1] - load_pose_position.y;
-      Epl[2] = Rpl[2] - load_pose_position.z;
+      Epl[0] = Op[0] - load_pose_position.x; // since encoder gives offset from drone position (position relative to drone)
+      Epl[1] = Op[1] - load_pose_position.y;
+      Epl[2] = Op[2] - load_pose_position.z;
     }
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
