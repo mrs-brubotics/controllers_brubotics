@@ -123,6 +123,8 @@ private:
 
   // | ----------------- Thesis B ---------------- |
   ros::Publisher custom_publisher_load_pose;
+  ros::Publisher custom_publisher_load_vel;
+  ros::Publisher custom_publisher_uav_state;
   ros::Publisher custom_publisher_load_pose_experiments;
   ros::Publisher custom_publisher_load_pose_error;
   ros::Publisher custom_publisher_load_velocity_error;
@@ -337,6 +339,8 @@ void Se3BruboticsLoadController::initialize(const ros::NodeHandle& parent_nh, [[
   if (run_type == "simulation")
   {
     custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
+    custom_publisher_load_vel   = nh_.advertise<geometry_msgs::Twist>("load_vel",1);
+    custom_publisher_uav_state   = nh_.advertise<mrs_msgs::UavState>("uav_state",1);
   }else{
     //publisher for encoders
     custom_publisher_load_pose_experiments   = nh_.advertise<geometry_msgs::Vector3>("load_pose_position",1);
@@ -513,6 +517,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
       return mrs_msgs::AttitudeCommand::ConstPtr(new mrs_msgs::AttitudeCommand(activation_attitude_cmd_));
     }
   }
+
+  //Thesis B: step ?
+  custom_publisher_uav_state.publish(uav_state_); 
+
   // | ----------------- Thesis B ---------------- |
   uav_name = getenv("UAV_NAME");
   // to see how many UAVs there are
@@ -1727,11 +1735,13 @@ void Se3BruboticsLoadController::loadStatesCallback(const gazebo_msgs::LinkState
       }
 
   load_velocity = loadmsg->twist[load_index];
-  custom_publisher_load_pose.publish(load_pose);
+  
 
   load_lin_vel[0]= load_velocity.linear.x;
   load_lin_vel[1]= load_velocity.linear.y;
   load_lin_vel[2]= load_velocity.linear.z;
+  custom_publisher_load_pose.publish(load_pose);
+  custom_publisher_load_vel.publish(load_velocity);
 }
 
 
