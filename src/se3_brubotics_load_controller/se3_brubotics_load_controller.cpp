@@ -128,6 +128,10 @@ private:
   ros::Publisher custom_publisher_load_pose_experiments;
   ros::Publisher custom_publisher_load_pose_error;
   ros::Publisher custom_publisher_load_velocity_error;
+  ros::Publisher publisher_encoder_angle_1;
+  ros::Publisher publisher_encoder_angle_2;
+  ros::Publisher publisher_Difference_load_drone_position;
+  ros::Publisher publisher_rel_load_pose_position;
   ros::Subscriber load_state_sub;
   geometry_msgs::Pose load_pose;
   geometry_msgs::Twist load_velocity;
@@ -137,7 +141,14 @@ private:
   Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
   geometry_msgs::Vector3 load_pose_position;
   Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
+  geometry_msgs::Vector3 rel_load_pose_position_to_publish;
   Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
+  geometry_msgs::Vector3 Difference_load_drone_position_to_publish;
+  geometry_msgs::Vector3 sum_load_pose;
+  geometry_msgs::Vector3 average_load_pose;
+  geometry_msgs::Vector3 sum_drone_pose;
+  geometry_msgs::Vector3 offset;
+  geometry_msgs::Vector3 average_drone_pose;
   bool payload_spawned = false;
   bool remove_offset = true;
   std::string load_gains_switch;
@@ -145,10 +156,13 @@ private:
   std::string run_type;
   double cable_length;
   float encoder_angle_1;
+  std_msgs::Float64 encoder_angle_1_to_publish;
   float encoder_angle_2;
+  std_msgs::Float64 encoder_angle_2_to_publish;
   float encoder_velocity_1;
   float encoder_velocity_2;
   double uav_heading;
+  int counter_angle = 0;
 
   //merge controller 1 and 2 uavs
   bool uav_id = false; // false = uav2, true = uav1
@@ -346,6 +360,10 @@ void Se3BruboticsLoadController::initialize(const ros::NodeHandle& parent_nh, [[
     custom_publisher_load_pose_experiments   = nh_.advertise<geometry_msgs::Vector3>("load_pose_position",1);
     custom_publisher_load_pose_error = nh_.advertise<geometry_msgs::Vector3>("load_pose_error",1);
     custom_publisher_load_velocity_error = nh_.advertise<geometry_msgs::Vector3>("load_velocity_error",1);
+    publisher_encoder_angle_1 = nh_.advertise<std_msgs::Float64>("encoder_angle_1",1);
+    publisher_encoder_angle_2 = nh_.advertise<std_msgs::Float64>("encoder_angle_2",1);
+    publisher_Difference_load_drone_position = nh_.advertise<geometry_msgs::Vector3>("Difference_load_drone_position",1);
+    publisher_rel_load_pose_position = nh_.advertise<geometry_msgs::Vector3>("rel_load_pose_position",1);
   }
   // | --------------------------------- |
   // | --------------- dynamic reconfigure server --------------- |
@@ -550,6 +568,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     data_payload_sub = nh_.subscribe("/nuc4/serial/received_message", 1, &Se3BruboticsLoadController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
     //slash.append(uav_name.append("/serial/received_message"))
   }
+  // ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
   // | --------------------------------- |
 
   // | ----------------- get the current heading ---------------- |
@@ -691,9 +710,36 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     }
   }else{
     
-    load_pose_position.x = Op[0] + Difference_load_drone_position[0];
-    load_pose_position.y = Op[1] + Difference_load_drone_position[1];
-    load_pose_position.z = Op[2] + Difference_load_drone_position[2];
+    if(counter_angle < 500){
+      counter_angle = counter_angle +1;
+      load_pose_position.x = Op[0] + Difference_load_drone_position[0];
+      load_pose_position.y = Op[1] + Difference_load_drone_position[1];
+      load_pose_position.z = Op[2] + Difference_load_drone_position[2];
+      
+      sum_load_pose.x = sum_load_pose.x + load_pose_position.x;
+      sum_drone_pose.x = sum_drone_pose.x + uav_state->pose.position.x;
+      sum_load_pose.y  = sum_load_pose.y + load_pose_position.y;
+      sum_drone_pose.y = sum_drone_pose.y + uav_state->pose.position.y;
+
+      load_pose_position.x = uav_state->pose.position.x;
+      load_pose_position.y = uav_state->pose.position.y;
+      load_pose_position.z = uav_state->pose.position.z;
+    }else{
+      average_load_pose.x = sum_load_pose.x/500.0;
+      average_drone_pose.x = sum_drone_pose.x/500.0;
+      average_load_pose.y = sum_load_pose.y/500.0;
+      average_drone_pose.y = sum_drone_pose.y/500.0;
+
+      offset.x = average_load_pose.x - average_drone_pose.x;
+      ROS_INFO_STREAM("offset x \n" << offset.x);
+
+      offset.y = average_load_pose.y - average_drone_pose.y;
+      ROS_INFO_STREAM("offset x \n" << offset.y);
+
+      load_pose_position.x = Op[0] + Difference_load_drone_position[0] - offset.x;
+      load_pose_position.y = Op[1] + Difference_load_drone_position[1] - offset.y;
+      load_pose_position.z = Op[2] + Difference_load_drone_position[2];      
+    }  
 
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
       Epl[0] = Op[0] - load_pose_position.x; // since encoder gives offset from drone position (position relative to drone)
@@ -717,8 +763,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsLoadController::update(con
     custom_publisher_load_pose_error.publish(load_pose_error);
     custom_publisher_load_velocity_error.publish(load_velocity_error);
 
-    ROS_INFO_STREAM("Se3BruboticsLoadController: Load_pose_position = \n" << load_pose_position);
-    ROS_INFO_STREAM("Se3BruboticsLoadController: Epl (Rpl-load_pose)= \n" << Epl);
+    // ROS_INFO_STREAM("Se3BruboticsLoadController: Load_pose_position = \n" << load_pose_position);
+    // ROS_INFO_STREAM("Se3BruboticsLoadController: Epl (Rpl-load_pose)= \n" << Epl);
 
   }
   
@@ -1772,13 +1818,36 @@ void Se3BruboticsLoadController::BacaCallback(const mrs_msgs::BacaProtocolConstP
     encoder_velocity_2 = encoder_output;
   }
 
+  encoder_angle_1_to_publish.data = encoder_angle_1;
+  publisher_encoder_angle_1.publish(encoder_angle_1_to_publish);
+  encoder_angle_2_to_publish.data = encoder_angle_2;
+  publisher_encoder_angle_2.publish(encoder_angle_2_to_publish);
+  //ROS_INFO_STREAM("Encoder_angle_1 \n" << encoder_angle_1_to_publish );
+  //ROS_INFO_STREAM("Encoder_angle_2 \n" << encoder_angle_2_to_publish );
+  
+
   rel_load_pose_position[0] = cable_length*sin(encoder_angle_1); // x relative to drone in drone coordinate (turns with uav_heading)
   rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
   rel_load_pose_position[2] = -sqrt(pow(cable_length,2) - (pow(rel_load_pose_position[0],2) + pow(rel_load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
 
+  rel_load_pose_position_to_publish.x = rel_load_pose_position[0];
+  rel_load_pose_position_to_publish.y = rel_load_pose_position[1];
+  rel_load_pose_position_to_publish.z = rel_load_pose_position[2];
+
+  publisher_rel_load_pose_position.publish(rel_load_pose_position_to_publish);
+  //ROS_INFO_STREAM("rel load pose position \n" << rel_load_pose_position_to_publish );
+
   Difference_load_drone_position[0] = (rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading)); // x relative to drone in absolute coordinate
   Difference_load_drone_position[1] = (-(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading))); // y relative to drone in absolute coordinate
   Difference_load_drone_position[2] = (rel_load_pose_position[2]); // z relative to drone in absolute coordinate
+
+  Difference_load_drone_position_to_publish.x = Difference_load_drone_position[0];
+  Difference_load_drone_position_to_publish.y = Difference_load_drone_position[1];
+  Difference_load_drone_position_to_publish.z = Difference_load_drone_position[2];
+
+
+  publisher_Difference_load_drone_position.publish(Difference_load_drone_position_to_publish);
+  //ROS_INFO_STREAM("Difference_load_drone_position \n" << Difference_load_drone_position_to_publish );
 
   //load_pose.position.x = load_pose_position[0];
   //load_pose.position.y = load_pose_position[1];
