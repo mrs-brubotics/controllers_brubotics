@@ -419,9 +419,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
   
-  ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.n_motors = \n" << common_handlers_->motor_params.n_motors);
-  ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.A = \n" << common_handlers_->motor_params.A);
-  ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.B = \n" << common_handlers_->motor_params.B);
+  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.n_motors = \n" << common_handlers_->motor_params.n_motors);
+  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.A = \n" << common_handlers_->motor_params.A);
+  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.B = \n" << common_handlers_->motor_params.B);
   // | -------------------- calculate the dt -------------------- |
 
   double dt;
@@ -598,14 +598,30 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     // because we need to control the attitude.
     Kq << kqxy_, kqxy_, kqz_;
   }
+  // a print to test if the gains change so you know where to change:
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Ka_x = %f", Ka(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Ka_y = %f", Ka(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Ka_z = %f", Ka(2));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kq_x = %f", Kq(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kq_y = %f", Kq(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kq_z = %f", Kq(2));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_x = %f", Kp(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_y = %f", Kp(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_z = %f", Kp(2));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_x = %f", Kv(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_y = %f", Kv(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_z = %f", Kv(2));
 
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
 
-  // ROS_INFO_STREAM("[Se3CopyController]: Kp = \n" << Kp);
-  // ROS_INFO_STREAM("Se3BruboticsController: Kv = \n" << Kv);
-  // ROS_INFO_STREAM("Se3BruboticsController: Ka = \n" << Ka);
-  // ROS_INFO_STREAM("Se3BruboticsController: Kq = \n" << Kq);
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_x*m = %f", Kp(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_y*m = %f", Kp(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_z*m = %f", Kp(2));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_x*m = %f", Kv(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_y*m = %f", Kv(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_z*m = %f", Kv(2));
+
 
   // | --------------- desired orientation matrix --------------- |
 

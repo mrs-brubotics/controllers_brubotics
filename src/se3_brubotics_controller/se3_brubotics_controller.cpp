@@ -596,16 +596,31 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
     // because we need to control the attitude.
     Kq << kqxy_, kqxy_, kqz_;
   }
-
+  // a print to test if the gains change so you know where to change:
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Ka_x = %f", Ka(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Ka_y = %f", Ka(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Ka_z = %f", Ka(2));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kq_x = %f", Kq(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kq_y = %f", Kq(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kq_z = %f", Kq(2));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_x = %f", Kp(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_y = %f", Kp(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_z = %f", Kp(2));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_x = %f", Kv(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_y = %f", Kv(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_z = %f", Kv(2));
   uav_mass_difference_ = 0; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
 
-  // a print to test if the gains change so you know where to change:
-  // ROS_INFO_STREAM("Se3BruboticsController: Kp = \n" << Kp);
-  // ROS_INFO_STREAM("Se3BruboticsController: Kv = \n" << Kv);
-  // ROS_INFO_STREAM("Se3BruboticsController: Ka = \n" << Ka);
-  // ROS_INFO_STREAM("Se3BruboticsController: Kq = \n" << Kq);
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_x*m = %f", Kp(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_y*m = %f", Kp(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_z*m = %f", Kp(2));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_x*m = %f", Kv(0));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_y*m = %f", Kv(1));
+  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_z*m = %f", Kv(2));
+
+
 
   // | --------------- desired orientation matrix --------------- |
 
