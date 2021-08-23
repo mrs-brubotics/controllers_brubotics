@@ -597,30 +597,33 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
     Kq << kqxy_, kqxy_, kqz_;
   }
   // a print to test if the gains change so you know where to change:
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Ka_x = %f", Ka(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Ka_y = %f", Ka(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Ka_z = %f", Ka(2));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kq_x = %f", Kq(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kq_y = %f", Kq(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kq_z = %f", Kq(2));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_x = %f", Kp(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_y = %f", Kp(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_z = %f", Kp(2));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_x = %f", Kv(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_y = %f", Kv(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_z = %f", Kv(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Ka_x = %f", Ka(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Ka_y = %f", Ka(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Ka_z = %f", Ka(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kq_x = %f", Kq(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kq_y = %f", Kq(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kq_z = %f", Kq(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kp_x = %f", Kp(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kp_y = %f", Kp(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kp_z = %f", Kp(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kv_x = %f", Kv(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kv_y = %f", Kv(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kv_z = %f", Kv(2));
   uav_mass_difference_ = 0; // ADDED BY BRYAN, UNDO FOR DEFAULT CONTROL!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
 
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_x*m = %f", Kp(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_y*m = %f", Kp(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kp_z*m = %f", Kp(2));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_x*m = %f", Kv(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_y*m = %f", Kv(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3BruboticsController]: Kv_z*m = %f", Kv(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kp_x*m = %f", Kp(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kp_y*m = %f", Kp(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kp_z*m = %f", Kp(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kv_x*m = %f", Kv(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kv_y*m = %f", Kv(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: Kv_z*m = %f", Kv(2));
 
-
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: _uav_mass_ = %f", _uav_mass_);
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: n_motors = %d", common_handlers_->motor_params.n_motors);
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: motor_params.A = %f", common_handlers_->motor_params.A);
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: motor_params.B = %f", common_handlers_->motor_params.B);
 
   // | --------------- desired orientation matrix --------------- |
 
@@ -719,7 +722,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
   // saturate the angle
 
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
-
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: constraints.tilt = %f", constraints.tilt);
   if (fabs(constraints.tilt) > 1e-3 && theta.data > constraints.tilt) {
     ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta.data / M_PI) * 180.0,
                       (constraints.tilt / M_PI) * 180.0);
@@ -839,6 +842,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
   // OLD double thrust_saturation_physical = pow((_thrust_saturation_-_motor_params_.B)/_motor_params_.A, 2);
   std_msgs::Float64 thrust_saturation_physical;
   thrust_saturation_physical.data = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, _thrust_saturation_.data);
+  ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: thrust_saturation_physical (N) = %f", thrust_saturation_physical.data);
   // ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
   // double hover_thrust = total_mass*_g_; use this as most correct if total_mass used in control
   std_msgs::Float64 hover_thrust;
@@ -1189,19 +1193,26 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
 
     auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
 
+    ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: constraints.roll_rate = %f", constraints.roll_rate);
+    ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: constraints.pitch_rate = %f", constraints.pitch_rate);
+    ROS_INFO_THROTTLE(15.0,"[Se3BruboticsController]: constraints.yaw_rate = %f", constraints.yaw_rate);
+
     if (t[0] > constraints.roll_rate) {
+      ROS_INFO_STREAM("[Se3BruboticsController]:saturating roll_rate: t[0]= \n" << t[0]);
       t[0] = constraints.roll_rate;
     } else if (t[0] < -constraints.roll_rate) {
       t[0] = -constraints.roll_rate;
     }
 
     if (t[1] > constraints.pitch_rate) {
+      ROS_INFO_STREAM("[Se3BruboticsController]:saturating pitch_rate: t[1]= \n" << t[1]);
       t[1] = constraints.pitch_rate;
     } else if (t[1] < -constraints.pitch_rate) {
       t[1] = -constraints.pitch_rate;
     }
 
     if (t[2] > constraints.yaw_rate) {
+      ROS_INFO_STREAM("[Se3BruboticsController]:saturating yaw_rate: t[2]= \n" << t[2]);
       t[2] = constraints.yaw_rate;
     } else if (t[2] < -constraints.yaw_rate) {
       t[2] = -constraints.yaw_rate;

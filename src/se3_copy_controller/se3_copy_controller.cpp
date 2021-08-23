@@ -419,9 +419,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
   
-  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.n_motors = \n" << common_handlers_->motor_params.n_motors);
-  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.A = \n" << common_handlers_->motor_params.A);
-  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.B = \n" << common_handlers_->motor_params.B);
+
   // | -------------------- calculate the dt -------------------- |
 
   double dt;
@@ -598,30 +596,40 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     // because we need to control the attitude.
     Kq << kqxy_, kqxy_, kqz_;
   }
+
   // a print to test if the gains change so you know where to change:
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Ka_x = %f", Ka(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Ka_y = %f", Ka(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Ka_z = %f", Ka(2));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kq_x = %f", Kq(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kq_y = %f", Kq(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kq_z = %f", Kq(2));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_x = %f", Kp(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_y = %f", Kp(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_z = %f", Kp(2));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_x = %f", Kv(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_y = %f", Kv(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_z = %f", Kv(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Ka_x = %f", Ka(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Ka_y = %f", Ka(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Ka_z = %f", Ka(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_x = %f", Kq(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_y = %f", Kq(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_z = %f", Kq(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_x = %f", Kp(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_y = %f", Kp(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_z = %f", Kp(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_x = %f", Kv(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_y = %f", Kv(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_z = %f", Kv(2));
 
   Kp = Kp * (_uav_mass_ + uav_mass_difference_);
   Kv = Kv * (_uav_mass_ + uav_mass_difference_);
 
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_x*m = %f", Kp(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_y*m = %f", Kp(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kp_z*m = %f", Kp(2));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_x*m = %f", Kv(0));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_y*m = %f", Kv(1));
-  ROS_INFO_THROTTLE(5.0,"[Se3CopyController]: Kv_z*m = %f", Kv(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_x*m = %f", Kp(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_y*m = %f", Kp(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_z*m = %f", Kp(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_x*m = %f", Kv(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_y*m = %f", Kv(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_z*m = %f", Kv(2));
 
+
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: _uav_mass_ = %f", _uav_mass_);
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: n_motors = %d", common_handlers_->motor_params.n_motors);
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: motor_params.A = %f", common_handlers_->motor_params.A);
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: motor_params.B = %f", common_handlers_->motor_params.B);
+
+  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.n_motors = \n" << common_handlers_->motor_params.n_motors);
+  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.A = \n" << common_handlers_->motor_params.A);
+  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.B = \n" << common_handlers_->motor_params.B);
 
   // | --------------- desired orientation matrix --------------- |
 
@@ -712,7 +720,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // saturate the angle
 
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
-
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: constraints.tilt = %f", constraints.tilt);
   if (fabs(constraints.tilt) > 1e-3 && theta.data > constraints.tilt) {
     ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta.data / M_PI) * 180.0,
                       (constraints.tilt / M_PI) * 180.0);
@@ -831,6 +839,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // OLD double thrust_saturation_physical = pow((_thrust_saturation_-_motor_params_.B)/_motor_params_.A, 2);
   std_msgs::Float64 thrust_saturation_physical;
   thrust_saturation_physical.data = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, _thrust_saturation_.data);
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: thrust_saturation_physical (N) = %f", thrust_saturation_physical.data);
   // ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
   // double hover_thrust = total_mass*_g_; use this as most correct if total_mass used in control
   std_msgs::Float64 hover_thrust;
@@ -1169,6 +1178,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   if (got_constraints_) {
 
     auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
+
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: constraints.roll_rate = %f", constraints.roll_rate);
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: constraints.pitch_rate = %f", constraints.pitch_rate);
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: constraints.yaw_rate = %f", constraints.yaw_rate);
 
     if (t[0] > constraints.roll_rate) {
       t[0] = constraints.roll_rate;
