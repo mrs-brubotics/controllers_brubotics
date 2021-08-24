@@ -1244,9 +1244,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3BruboticsController::update(const m
     ROS_WARN_THROTTLE(1.0, "[Se3BruboticsController]: outputting desired orientation (this is not normal)");
   }
 
-  output_command->desired_acceleration.x = desired_x_accel;
-  output_command->desired_acceleration.y = desired_y_accel;
-  output_command->desired_acceleration.z = desired_z_accel;
+  output_command->desired_acceleration.x = 0.0; //desired_x_accel;
+  output_command->desired_acceleration.y = 0.0; //desired_y_accel;
+  output_command->desired_acceleration.z = 0.0; //desired_z_accel;
 
   if (rampup_active_) {
 
