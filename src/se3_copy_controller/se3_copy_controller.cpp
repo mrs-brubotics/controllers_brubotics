@@ -843,7 +843,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // ROS_INFO_STREAM("thrust_saturation_physical = \n" << thrust_saturation_physical);
   // double hover_thrust = total_mass*_g_; use this as most correct if total_mass used in control
   std_msgs::Float64 hover_thrust;
-  hover_thrust.data = _uav_mass_*common_handlers_->g;
+  // Choose one of these two: replace uav_mass by total_mass to get the estimated hover thrust
+  // hover_thrust.data = _uav_mass_*common_handlers_->g; 
+  hover_thrust.data = total_mass*common_handlers_->g;
   // publish these so you have them in matlab
   pub_thrust_satlimit_physical_.publish(thrust_saturation_physical);
   pub_thrust_satlimit_.publish(_thrust_saturation_);

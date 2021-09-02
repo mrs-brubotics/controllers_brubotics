@@ -355,6 +355,7 @@ bool Se3BruboticsController::activate(const mrs_msgs::AttitudeCommand::ConstPtr&
   if (_rampup_enabled_) {
 
     // OLD double hover_thrust      = sqrt(last_attitude_cmd->total_mass * _g_) * _motor_params_.A + _motor_params_.B;
+    // double hover_thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, last_attitude_cmd->total_mass * common_handlers_->g);
     double hover_thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, last_attitude_cmd->total_mass * common_handlers_->g);
     double thrust_difference = hover_thrust - last_attitude_cmd->thrust;
 
