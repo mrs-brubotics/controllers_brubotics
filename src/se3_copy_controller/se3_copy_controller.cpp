@@ -124,6 +124,9 @@ private:
   ros::Publisher custom_publisher_load_pose;
   ros::Publisher custom_publisher_load_vel;
   ros::Publisher custom_publisher_uav_state;
+
+  ros::Publisher publisher_load_position_errors;
+
   ros::Publisher custom_publisher_load_pose_experiments;
   ros::Publisher custom_publisher_load_pose_error;
   ros::Publisher custom_publisher_load_velocity_error;
@@ -132,8 +135,12 @@ private:
   ros::Publisher publisher_Difference_load_drone_position;
   ros::Publisher publisher_rel_load_pose_position;
   ros::Subscriber load_state_sub;
+
   geometry_msgs::Pose load_pose;
   geometry_msgs::Twist load_velocity;
+  
+  geometry_msgs::Pose load_position_errors;
+
   geometry_msgs::Vector3 load_pose_error;
   geometry_msgs::Vector3 load_velocity_error;
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
@@ -368,6 +375,8 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
     custom_publisher_load_vel   = nh_.advertise<geometry_msgs::Twist>("load_vel",1);
     custom_publisher_uav_state   = nh_.advertise<mrs_msgs::UavState>("uav_state",1);
+
+    publisher_load_position_errors = nh_.advertise<geometry_msgs::Pose>("load_position_errors",1);
   }else{
     //publisher for encoders when doing real experiment
     custom_publisher_load_pose_experiments   = nh_.advertise<geometry_msgs::Vector3>("load_pose_position",1);
@@ -856,7 +865,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   if (control_reference->use_velocity_vertical) {
     Kpl[2] = 0;
-  } 
+  }
   else {
     Kpl[2] = 0;
   }
@@ -1042,6 +1051,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
   }
 
+//publish the error
+// load_position_errors.header.stamp =ros::Time::now(); // not to do that with Pose. it was the case with PoseArray in the tracker only.
+load_position_errors.position.x=Epl[0];
+load_position_errors.position.y=Epl[1];
+load_position_errors.position.z=Epl[2];
+
+  try {
+    publisher_load_position_errors.publish(load_position_errors);
+  }
+  catch (...) {
+    ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", publisher_load_position_errors.getTopic().c_str());
+  }
+// 
+
+
   //Eigen::Vector3d velocity_load_feedback = -Klv * load_lin_vel.array();
   Eigen::Vector3d position_load_feedback = -Kpl * Epl.array();
   Eigen::Vector3d velocity_load_feedback = -Kdl * Evl.array();
@@ -1057,7 +1081,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 // | -------------------------------se3+LOAD------------------------ | 
   Eigen::Vector3d f = position_load_feedback + velocity_load_feedback + position_feedback + velocity_feedback + integral_feedback + feed_forward;
 // | -------------------------------------------------------------| 
-  
+  // ROS_INFO_THROTTLE(1,"Controller : fx= %.2f,fy= %.2f, fz=%.2f ",f[0],f[1],f[2]);
   // | ----------- limiting the downwards acceleration ---------- |
   // the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
 
