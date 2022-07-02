@@ -406,6 +406,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
                                                                 const mrs_msgs::PositionCommand::ConstPtr& control_reference) {
 
   mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
+  mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3CopyController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
+
   //ROS_INFO("[Se3CopyController]: updating the se3_copy_controller of the controllers_brubotics package");
   {
     std::scoped_lock lock(mutex_uav_state_);
