@@ -168,6 +168,7 @@ private:
   float encoder_velocity_1;
   float encoder_velocity_2;
   double uav_heading;
+  Eigen::Matrix3d R;
   int counter_angle = 0;
 
   //merge controller 1 and 2 uavs
@@ -1921,10 +1922,10 @@ void Se3CopyController::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) 
   float encoder_output = (float) combined/ 1000.0;
   if (message_id == 24)
   {
-    encoder_angle_1 = encoder_output;
+    encoder_angle_1 = encoder_output; //theta '
   }else if (message_id == 25)
   {
-    encoder_angle_2 = encoder_output;
+    encoder_angle_2 = encoder_output; // Phi '
   }else if (message_id == 32)
   {
     encoder_velocity_1 = encoder_output;
@@ -1940,10 +1941,14 @@ void Se3CopyController::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) 
   //ROS_INFO_STREAM("Encoder_angle_1 \n" << encoder_angle_1_to_publish );
   //ROS_INFO_STREAM("Encoder_angle_2 \n" << encoder_angle_2_to_publish );
   
-
-  rel_load_pose_position[0] = cable_length*sin(encoder_angle_1); // x relative to drone in drone coordinate (turns with uav_heading)
+// Old equations eroneous :
+  // rel_load_pose_position[0] = cable_length*sin(encoder_angle_1); // x relative to drone in drone coordinate (turns with uav_heading)
+  // rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
+  // rel_load_pose_position[2] = -sqrt(pow(cable_length,2) - (pow(rel_load_pose_position[0],2) + pow(rel_load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
+// New corrected ones :
+  rel_load_pose_position[0] = cable_length*sin(encoder_angle_1)*cos(encoder_angle_2); // x relative to drone in drone coordinate (turns with uav_heading)
   rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
-  rel_load_pose_position[2] = -sqrt(pow(cable_length,2) - (pow(rel_load_pose_position[0],2) + pow(rel_load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
+  rel_load_pose_position[2] = -cable_length*cos(encoder_angle_1)*cos(encoder_angle_2);// z relative to drone in drone coordinate (turns with uav_heading)
 
   rel_load_pose_position_to_publish.x = rel_load_pose_position[0];
   rel_load_pose_position_to_publish.y = rel_load_pose_position[1];
@@ -1952,9 +1957,15 @@ void Se3CopyController::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) 
   publisher_rel_load_pose_position.publish(rel_load_pose_position_to_publish);
   //ROS_INFO_STREAM("rel load pose position \n" << rel_load_pose_position_to_publish );
 
-  Difference_load_drone_position[0] = (rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading)); // x relative to drone in absolute coordinate
-  Difference_load_drone_position[1] = (-(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading))); // y relative to drone in absolute coordinate
-  Difference_load_drone_position[2] = (rel_load_pose_position[2]); // z relative to drone in absolute coordinate
+// old erroneous equations :
+  // Difference_load_drone_position[0] = (rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading)); // x relative to drone in absolute coordinate (x_l,W -  x_q,W)
+  // Difference_load_drone_position[1] = (-(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading))); // y relative to drone in absolute coordinate
+  // Difference_load_drone_position[2] = (rel_load_pose_position[2]); // z relative to drone in absolute coordinate
+// New corrected ones :
+
+// Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
+
+ Difference_load_drone_position=R*rel_load_pose_position;
 
   Difference_load_drone_position_to_publish.x = Difference_load_drone_position[0];
   Difference_load_drone_position_to_publish.y = Difference_load_drone_position[1];
