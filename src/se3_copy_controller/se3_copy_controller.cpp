@@ -951,22 +951,24 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 // | -----------------LOAD--------------------------|
 
   load_mass_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
-  uav_mass_difference_ = 0; 
+  // uav_mass_difference_ = 0; 
   //ROS_INFO_STREAM("UAV_massInfo \n" << _uav_mass_ );
   double total_mass = 0;
-
-  if (run_type == "simulation"){ 
-    if(payload_spawned){
-      total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;
-      //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
+  if(load_gains_switch=="true"){
+    if (run_type == "simulation"){ 
+      if(payload_spawned){
+        total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;
+        //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
+      }else{
+        total_mass = _uav_mass_ + uav_mass_difference_ ;
+        //ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
+      }
     }else{
-      total_mass = _uav_mass_ + uav_mass_difference_ ;
-      //ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
+      total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;  // TODONeed to solve that for hardware test as no load_mass.
     }
   }else{
-    total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;  // TODONeed to solve that for hardware test as no load_mass.
+    total_mass = _uav_mass_ + uav_mass_difference_;
   }
-
   //ROS_INFO_STREAM("Se3BruboticsLoadController: total mass = \n" << total_mass );
 
   Kp = Kp * total_mass;
