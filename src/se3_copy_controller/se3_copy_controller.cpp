@@ -952,7 +952,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   load_mass_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
   // uav_mass_difference_ = 0; 
-  //ROS_INFO_STREAM("UAV_massInfo \n" << _uav_mass_ );
+  //ROS_INFO_STREAM("UAV_massInfo \n" << _uav_mass_ ); // _uav_mass_ is given in session file
   double total_mass = 0;
   if(load_gains_switch=="true"){
     if (run_type == "simulation"){ 
@@ -969,7 +969,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   }else{
     total_mass = _uav_mass_ + uav_mass_difference_;
   }
-  //ROS_INFO_STREAM("Se3BruboticsLoadController: total mass = \n" << total_mass );
+  // ROS_INFO_STREAM("Se3BruboticsLoadController: total mass = \n" << total_mass );// Ouputs well the UAV mass when no payload, and the UAV+payload mass when the payload has spawned
 
   Kp = Kp * total_mass;
   Kv = Kv * total_mass;
