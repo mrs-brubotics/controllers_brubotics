@@ -20,8 +20,6 @@ find_package(catkin REQUIRED COMPONENTS
 generate_dynamic_reconfigure_options(
   cfg/se3_brubotics_controller.cfg 
   cfg/se3_copy_controller.cfg
-  cfg/se3_brubotics_load_controller.cfg
-  cfg/se3_brubotics_pm_controller.cfg
   )
 
 set(CMAKE_CXX_STANDARD 17)
@@ -111,39 +109,6 @@ target_link_libraries(Se3BruboticsController
   )
 
 
-  # Se3BruboticsLoadController
-
-add_library(Se3BruboticsLoadController
-  src/se3_brubotics_load_controller/se3_brubotics_load_controller.cpp
-  )
-
-add_dependencies(Se3BruboticsLoadController
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_gencfg
-  )
-
-target_link_libraries(Se3BruboticsLoadController
-  ${catkin_LIBRARIES}
-  )
-
-  # Se3BruboticsPmController
-#[[
-add_library(Se3BruboticsPmController
-  src/se3_brubotics_pm_controller/se3_brubotics_pm_controller.cpp
-  )
-
-add_dependencies(Se3BruboticsPmController
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_gencfg
-  )
-
-target_link_libraries(Se3BruboticsPmController
-  ${catkin_LIBRARIES}
-  )
-]]#
-
 #############
 ## Install ##
 #############
@@ -151,8 +116,6 @@ target_link_libraries(Se3BruboticsPmController
 install(TARGETS
   Se3CopyController
   Se3BruboticsController
-  Se3BruboticsLoadController
-  #Se3BruboticsPmController
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

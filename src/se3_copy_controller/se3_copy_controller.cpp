@@ -263,7 +263,7 @@ private:
 
 void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space, const double uav_mass,
                                std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
-
+  ROS_INFO("[Se3CopyController]: start of initialize");
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
@@ -352,6 +352,9 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[Se3CopyController]: could not load all parameters!");
     ros::requestShutdown();
+  }
+  else{
+    ROS_INFO("[Se3CopyController]: correctly loaded all Se3CopyController parameters!");
   }
 
   // | ---------------- prepare stuff from params --------------- |
