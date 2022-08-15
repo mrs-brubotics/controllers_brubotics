@@ -99,6 +99,8 @@ private:
   // gains that are used and already filtered
   double kpxy_;       // position xy gain
   double kvxy_;       // velocity xy gain
+  double kplxy_;      // position xy gain for the payload controller
+  double kvlxy_;      // velocity xy gain for the payload controller
   double kaxy_;       // acceleration xy gain (feed forward, =1)
   double kiwxy_;      // world xy integral gain
   double kibxy_;      // body xy integral gain
@@ -294,6 +296,10 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
 
   param_loader.loadParam("default_gains/horizontal/kiw", kiwxy_);
   param_loader.loadParam("default_gains/horizontal/kib", kibxy_);
+
+  // Lateral gains for load damping part of the controller
+  param_loader.loadParam("default_gains/horizontal/kpl", kplxy_);
+  param_loader.loadParam("default_gains/horizontal/kvl", kvlxy_);
 
   // | ------------------------- rampup ------------------------- |
 
@@ -800,25 +806,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   }
   
-  // 1e method pandolfo
-  /*
-  Eigen::Array3d  Klv = Eigen::Array3d::Zero(3); // Kv for the load
- 
-  if (control_reference->use_velocity_horizontal) {
-      Klv[0] = 0.4;
-      Klv[1] = 0.4;
-  } else {
-      Klv[0] = 0;
-      Klv[1] = 0;
-  }
-
-  if (control_reference->use_velocity_vertical) {
-    Klv[2] = 0;
-  } 
-  else {
-    Klv[2] = 0;
-  }
-  */
 
   // 2e method pandolfo
   Eigen::Array3d  Kpl = Eigen::Array3d::Zero(3); 
@@ -829,7 +816,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     // gains activated
     if (control_reference->use_velocity_horizontal) {
       // gains activated
-      Kpl[0] = 7.0; //7.0
+      Kpl[0] = kplxy_; //7.0
       Kpl[1] = Kpl[0];
     } else {
       Kpl[0] = 0;
@@ -837,7 +824,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
 
     if (control_reference->use_velocity_horizontal) {
-      Kdl[0] = 0.5; //0.5
+      Kdl[0] = kvlxy_; //0.5
       Kdl[1] = Kdl[0];
     } else {
       Kdl[0] = 0;
@@ -865,6 +852,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
     //ROS_INFO_STREAM("gains" << std::endl << "desactivated");
   }
+    // ROS_INFO_STREAM("gains load pos" <<  Kpl);
+    // ROS_INFO_STREAM("gains load vel" <<  Kdl);
 
   if (control_reference->use_velocity_vertical) {
     Kpl[2] = 0;
