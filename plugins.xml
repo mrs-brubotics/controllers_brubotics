@@ -9,16 +9,3 @@
     <description>This is Se3BruboticsController adapted from CTU and custom designed by Bryan Convens.</description>
   </class>
 </library>
-
-<library path="lib/libSe3BruboticsLoadController">
-  <class name="controllers_brubotics/Se3BruboticsLoadController" type="mrs_uav_controllers::se3_brubotics_load_controller::Se3BruboticsLoadController" base_class_type="mrs_uav_managers::Controller">
-    <description>[SE3 controller designed for drone with payload]</description>
-  </class>
-</library>
-<!--
-<library path="lib/libSe3BruboticsPmController">
-  <class name="controllers_brubotics/Se3BruboticsPmController" type="mrs_uav_controllers::se3_brubotics_pm_controller::Se3BruboticsPmController" base_class_type="mrs_uav_managers::Controller">
-    <description>[Controller designed for one UAV with point mass load]</description>
-  </class>
-</library>
--->
