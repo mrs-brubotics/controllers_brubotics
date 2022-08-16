@@ -159,7 +159,6 @@ private:
   geometry_msgs::Vector3 average_drone_pose;
   bool payload_spawned_ = false;
   bool remove_offset = true;
-  std::string load_gains_switch;
   Eigen::Vector3d load_pose_position_offset = Eigen::Vector3d::Zero(3);
   std::string run_type;
   double cable_length;
@@ -721,6 +720,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   cable_length = std::stod(getenv("CABLE_LENGTH")); // is changed inside session.yml to take length cable into account! stod to transform string defined in session to double.
 
 
+
   if (run_type == "simulation"){
     if(payload_spawned_){
       if(remove_offset){
@@ -804,9 +804,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // 2e method pandolfo
   Eigen::Array3d  Kpl = Eigen::Array3d::Zero(3); 
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
-  load_gains_switch = getenv("LOAD_GAIN_SWITCH");
 
-  if (load_gains_switch == "true"){ 
+  if (_type_of_system_ == "1uav_payload"){ 
     // gains activated
     if (control_reference->use_velocity_horizontal) {
       // gains activated
@@ -827,7 +826,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
     //ROS_INFO_STREAM("gains" << std::endl << "activated");
   }else{
-    // gains desactivated
+    // gains desactivated as no payload
     if (control_reference->use_velocity_horizontal) {
       Kpl[0] = 0.0; //7.0
       Kpl[1] = Kpl[0];
@@ -937,7 +936,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // uav_mass_difference_ = 0; 
   //ROS_INFO_STREAM("UAV_massInfo \n" << _uav_mass_ ); // _uav_mass_ is given in session file
   double total_mass = 0;
-  if(load_gains_switch=="true"){
+  if(_type_of_system_ == "1uav_payload"){
     if (run_type == "simulation"){ 
       if(payload_spawned_){
         total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;
@@ -1865,6 +1864,21 @@ void Se3CopyController::loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr
 
 
     ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: publish this here or you get strange error");
+
+    try {
+      custom_publisher_load_pose.publish(anchoring_pt_pose_);
+    }
+    catch (...) {
+      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", custom_publisher_load_pose.getTopic().c_str());
+    }
+    try {
+      custom_publisher_load_vel.publish(anchoring_pt_velocity_);
+    }
+    catch (...) {
+      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", custom_publisher_load_vel.getTopic().c_str());
+    }
+// 
+
   // for(size_t i = 0; i < link_names.size(); i++)
   // {
   //   if (number_of_uav == "2")
