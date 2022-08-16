@@ -138,16 +138,16 @@ private:
   ros::Publisher publisher_rel_load_pose_position;
   ros::Subscriber load_state_sub;
 
-  geometry_msgs::Pose load_pose;
-  geometry_msgs::Twist load_velocity;
+  geometry_msgs::Pose anchoring_pt_pose_;
+  geometry_msgs::Twist anchoring_pt_velocity_;
   
   geometry_msgs::Pose load_position_errors;
 
   geometry_msgs::Vector3 load_pose_error;
   geometry_msgs::Vector3 load_velocity_error;
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
-  Eigen::Vector3d load_lin_vel = Eigen::Vector3d::Zero(3);
-  geometry_msgs::Vector3 load_pose_position;
+  Eigen::Vector3d anchoring_pt_lin_vel_ = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d anchoring_pt_pose_position_;
   Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
   geometry_msgs::Vector3 rel_load_pose_position_to_publish;
   Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
@@ -157,7 +157,7 @@ private:
   geometry_msgs::Vector3 sum_drone_pose;
   geometry_msgs::Vector3 offset;
   geometry_msgs::Vector3 average_drone_pose;
-  bool payload_spawned = false;
+  bool payload_spawned_ = false;
   bool remove_offset = true;
   std::string load_gains_switch;
   Eigen::Vector3d load_pose_position_offset = Eigen::Vector3d::Zero(3);
@@ -172,10 +172,10 @@ private:
   double uav_heading;
   Eigen::Matrix3d R;
   int counter_angle = 0;
-
+  std::string _type_of_system_; 
   //merge controller 1 and 2 uavs
   bool uav_id = false; // false = uav2, true = uav1
-  std::string uav_name;
+  std::string _uav_name_;
   std::string number_of_uav;
   
   ros::Subscriber data_payload_sub;
@@ -271,6 +271,9 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   _uav_mass_       = std::stod(getenv("UAV_MASS"));
   // | --------------------------------- |
   // _uav_mass_       = uav_mass; I find it easier to change mass in session file rather than in several files from mrs, what do you think ? Must put a recall in the readme of each test TODO
+
+  _type_of_system_    = getenv("TYPE_OF_SYSTEM"); // Can be : 1uav_no_payload, 1uav_payload, 2uavs_payload, depending on which predictions and controller you want to use.  
+  ROS_INFO("[Se3CopyController]: before if with getenv");
 
   ros::Time::waitForValid();
 
@@ -575,7 +578,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // | -----------------LOAD---------------- |
 
   custom_publisher_uav_state.publish(uav_state_); 
-  uav_name = getenv("UAV_NAME");
+  _uav_name_ = getenv("UAV_NAME");
   // to see how many UAVs there are
    
   if (run_type == "simulation"){
@@ -583,7 +586,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     if (number_of_uav == "2")
     {
       // to see which UAV it is
-      if (uav_name == "uav1")
+      if (_uav_name_ == "uav1")
       {
         uav_id = true; //uav 1
       }else{
@@ -602,7 +605,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   }else{
     // subscriber of the encoder
     data_payload_sub = nh_.subscribe("/nuc4/serial/received_message", 1, &Se3CopyController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
-    //slash.append(uav_name.append("/serial/received_message"))
+    //slash.append(_uav_name_.append("/serial/received_message"))
   }
   // ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
 
@@ -707,41 +710,29 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   // Rpl - position reference load in global frame
   // Rvl - velocity reference load in global frame
-  Eigen::Vector3d Rpl = Eigen::Vector3d::Zero(3);
 
   // Opl - position load in global frame
   // Ovl - velocity load in global frame
 
-  Eigen::Vector3d Opl(load_pose_position.x, load_pose_position.y, load_pose_position.z);
-  Eigen::Vector3d Ovl(load_lin_vel[0], load_lin_vel[1], load_lin_vel[2]);
+  Eigen::Vector3d Opl(anchoring_pt_pose_position_[0], anchoring_pt_pose_position_[1], anchoring_pt_pose_position_[2]);
+  Eigen::Vector3d Ovl(anchoring_pt_lin_vel_[0], anchoring_pt_lin_vel_[1], anchoring_pt_lin_vel_[2]);
   Eigen::Vector3d Epl = Eigen::Vector3d::Zero(3); // Load position control error
   Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3); // Load velocity control error
   cable_length = std::stod(getenv("CABLE_LENGTH")); // is changed inside session.yml to take length cable into account! stod to transform string defined in session to double.
 
-  if (control_reference->use_position_vertical || control_reference->use_position_horizontal) {
-
-    if (control_reference->use_position_horizontal) {
-      Rpl[0] = control_reference->position.x;
-      Rpl[1] = control_reference->position.y;
-    } 
-
-    if (control_reference->use_position_vertical) {
-      Rpl[2] = control_reference->position.z - cable_length;
-    } 
-  }
 
   if (run_type == "simulation"){
-    if(payload_spawned){
+    if(payload_spawned_){
       if(remove_offset){
-        Epl = Rp - Opl; //Op - Opl is super unstable!!
+        Epl = Op-Opl ;
         load_pose_position_offset = Epl;
         remove_offset = false;
       } 
     }
 
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-      Epl = Rp - Opl - load_pose_position_offset; // remove offset because the load does not spawn perfectly under drone
-      //(position relative to base frame)
+      Epl = Op - Opl - load_pose_position_offset; // remove offset because the load does not spawn perfectly under drone
+      //(position relative to base frame)// 2021 student said this : Op - Opl is super unstable!! However, this is the way Pandolfo thesis explained it. And I think what they did (Rp - Opl) will always be more unstable, as for a very far references, the control actions of the error of the UAV and the one of the Payload will superpose and generate a huge Td, which can easilly saturates the actuators and creates instability. 
     }
 
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
@@ -751,61 +742,61 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
   }else{
     
-    if(counter_angle < 500){
-      counter_angle = counter_angle +1;
-      load_pose_position.x = Op[0] + Difference_load_drone_position[0];
-      load_pose_position.y = Op[1] + Difference_load_drone_position[1];
-      load_pose_position.z = Op[2] + Difference_load_drone_position[2];
+    // if(counter_angle < 500){
+    //   counter_angle = counter_angle +1;
+    //   load_pose_position.x = Op[0] + Difference_load_drone_position[0];
+    //   load_pose_position.y = Op[1] + Difference_load_drone_position[1];
+    //   load_pose_position.z = Op[2] + Difference_load_drone_position[2];
       
-      sum_load_pose.x = sum_load_pose.x + load_pose_position.x;
-      sum_drone_pose.x = sum_drone_pose.x + uav_state->pose.position.x;
-      sum_load_pose.y  = sum_load_pose.y + load_pose_position.y;
-      sum_drone_pose.y = sum_drone_pose.y + uav_state->pose.position.y;
+    //   sum_load_pose.x = sum_load_pose.x + load_pose_position.x;
+    //   sum_drone_pose.x = sum_drone_pose.x + uav_state->pose.position.x;
+    //   sum_load_pose.y  = sum_load_pose.y + load_pose_position.y;
+    //   sum_drone_pose.y = sum_drone_pose.y + uav_state->pose.position.y;
 
-      load_pose_position.x = uav_state->pose.position.x;
-      load_pose_position.y = uav_state->pose.position.y;
-      load_pose_position.z = uav_state->pose.position.z;
-    }else{
-      average_load_pose.x = sum_load_pose.x/500.0;
-      average_drone_pose.x = sum_drone_pose.x/500.0;
-      average_load_pose.y = sum_load_pose.y/500.0;
-      average_drone_pose.y = sum_drone_pose.y/500.0;
+    //   load_pose_position.x = uav_state->pose.position.x;
+    //   load_pose_position.y = uav_state->pose.position.y;
+    //   load_pose_position.z = uav_state->pose.position.z;
+    // }else{
+    //   average_load_pose.x = sum_load_pose.x/500.0;
+    //   average_drone_pose.x = sum_drone_pose.x/500.0;
+    //   average_load_pose.y = sum_load_pose.y/500.0;
+    //   average_drone_pose.y = sum_drone_pose.y/500.0;
 
-      offset.x = average_load_pose.x - average_drone_pose.x;
-      ROS_INFO_STREAM("offset x \n" << offset.x);
+    //   offset.x = average_load_pose.x - average_drone_pose.x;
+    //   ROS_INFO_STREAM("offset x \n" << offset.x);
 
-      offset.y = average_load_pose.y - average_drone_pose.y;
-      ROS_INFO_STREAM("offset x \n" << offset.y);
+    //   offset.y = average_load_pose.y - average_drone_pose.y;
+    //   ROS_INFO_STREAM("offset x \n" << offset.y);
 
-      load_pose_position.x = Op[0] + Difference_load_drone_position[0] - offset.x;
-      load_pose_position.y = Op[1] + Difference_load_drone_position[1] - offset.y;
-      load_pose_position.z = Op[2] + Difference_load_drone_position[2];      
-    }  
+    //   load_pose_position.x = Op[0] + Difference_load_drone_position[0] - offset.x;
+    //   load_pose_position.y = Op[1] + Difference_load_drone_position[1] - offset.y;
+    //   load_pose_position.z = Op[2] + Difference_load_drone_position[2];      
+    // }  
 
-    if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-      Epl[0] = Op[0] - load_pose_position.x; // since encoder gives offset from drone position (position relative to drone)
-      Epl[1] = Op[1] - load_pose_position.y;
-      Epl[2] = Op[2] - load_pose_position.z;
-    }
-    if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
-      control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
-      Evl = -Ovl; // if encoders don't move, there is no speed (speed relative to drone)
-    }
-    load_pose_error.x = -Epl[0];
-    load_pose_error.y = -Epl[1];
-    load_pose_error.z = -Epl[2];
+    // if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
+    //   Epl[0] = Op[0] - load_pose_position.x; // since encoder gives offset from drone position (position relative to drone)
+    //   Epl[1] = Op[1] - load_pose_position.y;
+    //   Epl[2] = Op[2] - load_pose_position.z;
+    // }
+    // if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
+    //   control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
+    //   Evl = -Ovl; // if encoders don't move, there is no speed (speed relative to drone)
+    // }
+    // load_pose_error.x = -Epl[0];
+    // load_pose_error.y = -Epl[1];
+    // load_pose_error.z = -Epl[2];
 
-    load_velocity_error.x = -Evl[0];
-    load_velocity_error.y = -Evl[1];
-    load_velocity_error.z = -Evl[2];
+    // load_velocity_error.x = -Evl[0];
+    // load_velocity_error.y = -Evl[1];
+    // load_velocity_error.z = -Evl[2];
 
-    custom_publisher_load_pose_experiments.publish(load_pose_position);
+    // custom_publisher_load_pose_experiments.publish(load_pose_position);
     
-    custom_publisher_load_pose_error.publish(load_pose_error);
-    custom_publisher_load_velocity_error.publish(load_velocity_error);
+    // custom_publisher_load_pose_error.publish(load_pose_error);
+    // custom_publisher_load_velocity_error.publish(load_velocity_error);
 
-    // ROS_INFO_STREAM("Se3BruboticsLoadController: Load_pose_position = \n" << load_pose_position);
-    // ROS_INFO_STREAM("Se3BruboticsLoadController: Epl (Rpl-load_pose)= \n" << Epl);
+    // // ROS_INFO_STREAM("Se3BruboticsLoadController: Load_pose_position = \n" << load_pose_position);
+    // // ROS_INFO_STREAM("Se3BruboticsLoadController: Epl (Rpl-load_pose)= \n" << Epl);
 
   }
   
@@ -948,7 +939,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   double total_mass = 0;
   if(load_gains_switch=="true"){
     if (run_type == "simulation"){ 
-      if(payload_spawned){
+      if(payload_spawned_){
         total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;
         //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
       }else{
@@ -1036,12 +1027,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   if (run_type == "simulation"){ 
     for (int i = 0; i < 3; i++) // in order to set the error to 0 befor the load spawn
     {
-      if(!payload_spawned)
+      if(!payload_spawned_)
       {
         Epl = Epl*0;
         Evl = Evl*0;
       }
-      if(payload_spawned && abs(Epl[i]) < 0.05)
+      if(payload_spawned_ && abs(Epl[i]) < 0.05)
       {
         Epl[i] = Epl[i]*0;
       }
@@ -1833,73 +1824,111 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3CopyController::setC
 // | ----------------- load subscribtion callback --------------|
 
 void Se3CopyController::loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg) {
-  int load_index = -1;
-  std::vector<std::string> link_names = loadmsg->name;
+    //This callback function is only triggered when doing simulation, and will be used to unpack the data coming from the Gazebo topics.
+    // Everything is called
+    int anchoring_pt_index; //Will be used to store the index at which the payload appears in the message that is received from Gazebo. 
+    std::vector<std::string> link_names = loadmsg->name; // Take a vector containing the name of each link in the simulation. Among these there is the links that are related to the payload. 
+    for(size_t i = 0; i < link_names.size(); i++){ // Go through all the link names
 
-  for(size_t i = 0; i < link_names.size(); i++)
-  {
-    if (number_of_uav == "2")
-    {
-      if (uav_id) // for uav1
-      {
-        if(link_names[i] == "bar::link_04"){
-            load_index = i;
-            payload_spawned = true;
-        }
-      }else { // for uav2
-        if(link_names[i] == "bar::link_01"){
-            load_index = i;
-            payload_spawned = true;
+      if (_type_of_system_ == "1uav_payload"){
+        if(link_names[i] == "bar::link_01"){ //link_01 is the point mass payload link. When the link_name correspond to the one of the payload, defined in the URDF/xacro files of the testing folder.
+          anchoring_pt_index = i; //Store the index of the name, as it will be used as the index to access all the states of this link, in the loadmsg later.
+          payload_spawned_ = true; //Notify that the payload has spawned. This will only be triggered once, and allow predictions to start.
         }
       }
-    }else{
-      if(link_names[i] == "bar::link_01")
-      {
-        load_index = i;
-        payload_spawned = true;
-      }else{
-      }  
-    }   
-  }
-  
-  load_pose = loadmsg->pose[load_index];
-  load_pose_position.x = load_pose.position.x;
-  load_pose_position.y = load_pose.position.y;
-  load_pose_position.z = load_pose.position.z;
+      if (_type_of_system_ == "2uavs_payload"){ // 2UAV transporting beam payload case. Need to return different link if this UAV is the uav1 or 2. 
+        if (_uav_name_=="uav1"){
+          if(link_names[i] == "bar::link_04"){ //link_04 correspond to the anchoring point of uav1
+              anchoring_pt_index = i;
+              payload_spawned_ = true;
+          }
+        }
+        else if (_uav_name_=="uav2") { // for uav2
+          if(link_names[i] == "bar::link_01"){ //link_01 correspond to the anchoring point of uav1
+              anchoring_pt_index = i;
+              payload_spawned_ = true;
+          }
+        }
+      }
+    }
+    // Extract the value from the received loadmsg. 
+    anchoring_pt_pose_= loadmsg->pose[anchoring_pt_index]; // Now that we know which index refers to the anchoring point we search for (depending on which system we have), we can use it to get the actual state of this point.  
+    anchoring_pt_pose_position_[0] = anchoring_pt_pose_.position.x;
+    anchoring_pt_pose_position_[1] = anchoring_pt_pose_.position.y;
+    anchoring_pt_pose_position_[2] = anchoring_pt_pose_.position.z;
 
-  //ROS_INFO_STREAM("Load Pose \n" << load_pose );
+    anchoring_pt_velocity_ = loadmsg->twist[anchoring_pt_index];
+    // TODO: why only the linear velocity of the load is required and what about rotational velocity in the case of beam load used in 2UAV model? THis is anchoring point, it will be used to deduce rot velocity of the beam in the first iteration of the prediction
+    anchoring_pt_lin_vel_[0]= anchoring_pt_velocity_.linear.x;
+    anchoring_pt_lin_vel_[1]= anchoring_pt_velocity_.linear.y;
+    anchoring_pt_lin_vel_[2]= anchoring_pt_velocity_.linear.z;
 
-  // for (int i = 0; i < 3; i++) // to set it to zero when the load hasn't spawn yet
+
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: publish this here or you get strange error");
+  // for(size_t i = 0; i < link_names.size(); i++)
   // {
-  //     if (load_pose_position[i] > 1000)
+  //   if (number_of_uav == "2")
+  //   {
+  //     if (uav_id) // for uav1
   //     {
-  //       load_pose_position[i] = 0;
-  //     } else {
-  //       load_pose_position[i] = load_pose_position[i];
+  //       if(link_names[i] == "bar::link_04"){
+  //           load_index = i;
+  //           payload_spawned_ = true;
+  //       }
+  //     }else { // for uav2
+  //       if(link_names[i] == "bar::link_01"){
+  //           load_index = i;
+  //           payload_spawned = true;
+  //       }
   //     }
+  //   }else{
+  //     if(link_names[i] == "bar::link_01")
+  //     {
+  //       load_index = i;
+  //       payload_spawned_ = true;
+  //     }else{
+  //     }  
+  //   }   
   // }
+  
+  // load_pose = loadmsg->pose[load_index];
+  // load_pose_position.x = load_pose.position.x;
+  // load_pose_position.y = load_pose.position.y;
+  // load_pose_position.z = load_pose.position.z;
 
-  if (load_pose_position.x > 1000)
-      {
-        load_pose_position.x = 0;
-      }
-  if (load_pose_position.y > 1000)
-      {
-        load_pose_position.y = 0;
-      }
-  if (load_pose_position.z > 1000)
-      {
-        load_pose_position.z = 0;
-      }
+  // //ROS_INFO_STREAM("Load Pose \n" << load_pose );
 
-  load_velocity = loadmsg->twist[load_index];
+  // // for (int i = 0; i < 3; i++) // to set it to zero when the load hasn't spawn yet
+  // // {
+  // //     if (load_pose_position[i] > 1000)
+  // //     {
+  // //       load_pose_position[i] = 0;
+  // //     } else {
+  // //       load_pose_position[i] = load_pose_position[i];
+  // //     }
+  // // }
+
+  // if (load_pose_position.x > 1000)
+  //     {
+  //       load_pose_position.x = 0;
+  //     }
+  // if (load_pose_position.y > 1000)
+  //     {
+  //       load_pose_position.y = 0;
+  //     }
+  // if (load_pose_position.z > 1000)
+  //     {
+  //       load_pose_position.z = 0;
+  //     }
+
+  // load_velocity = loadmsg->twist[load_index];
   
 
-  load_lin_vel[0]= load_velocity.linear.x;
-  load_lin_vel[1]= load_velocity.linear.y;
-  load_lin_vel[2]= load_velocity.linear.z;
-  custom_publisher_load_pose.publish(load_pose);
-  custom_publisher_load_vel.publish(load_velocity);
+  // load_lin_vel[0]= load_velocity.linear.x;
+  // load_lin_vel[1]= load_velocity.linear.y;
+  // load_lin_vel[2]= load_velocity.linear.z;
+  // custom_publisher_load_pose.publish(load_pose);
+  // custom_publisher_load_vel.publish(load_velocity);
 }
 
 
@@ -1930,56 +1959,56 @@ void Se3CopyController::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) 
     encoder_velocity_2 = encoder_output;
   }
 
-  encoder_angle_1_to_publish.data = encoder_angle_1;
-  publisher_encoder_angle_1.publish(encoder_angle_1_to_publish);
-  encoder_angle_2_to_publish.data = encoder_angle_2;
-  publisher_encoder_angle_2.publish(encoder_angle_2_to_publish);
-  //ROS_INFO_STREAM("Encoder_angle_1 \n" << encoder_angle_1_to_publish );
-  //ROS_INFO_STREAM("Encoder_angle_2 \n" << encoder_angle_2_to_publish );
+//   encoder_angle_1_to_publish.data = encoder_angle_1;
+//   publisher_encoder_angle_1.publish(encoder_angle_1_to_publish);
+//   encoder_angle_2_to_publish.data = encoder_angle_2;
+//   publisher_encoder_angle_2.publish(encoder_angle_2_to_publish);
+//   //ROS_INFO_STREAM("Encoder_angle_1 \n" << encoder_angle_1_to_publish );
+//   //ROS_INFO_STREAM("Encoder_angle_2 \n" << encoder_angle_2_to_publish );
   
-// Old equations eroneous :
-  // rel_load_pose_position[0] = cable_length*sin(encoder_angle_1); // x relative to drone in drone coordinate (turns with uav_heading)
-  // rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
-  // rel_load_pose_position[2] = -sqrt(pow(cable_length,2) - (pow(rel_load_pose_position[0],2) + pow(rel_load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
-// New corrected ones :
-  rel_load_pose_position[0] = cable_length*sin(encoder_angle_1)*cos(encoder_angle_2); // x relative to drone in drone coordinate (turns with uav_heading)
-  rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
-  rel_load_pose_position[2] = -cable_length*cos(encoder_angle_1)*cos(encoder_angle_2);// z relative to drone in drone coordinate (turns with uav_heading)
+// // Old equations eroneous :
+//   // rel_load_pose_position[0] = cable_length*sin(encoder_angle_1); // x relative to drone in drone coordinate (turns with uav_heading)
+//   // rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
+//   // rel_load_pose_position[2] = -sqrt(pow(cable_length,2) - (pow(rel_load_pose_position[0],2) + pow(rel_load_pose_position[1],2))); // z relative to drone in drone coordinate (turns with uav_heading)
+// // New corrected ones :
+//   rel_load_pose_position[0] = cable_length*sin(encoder_angle_1)*cos(encoder_angle_2); // x relative to drone in drone coordinate (turns with uav_heading)
+//   rel_load_pose_position[1] = cable_length*sin(encoder_angle_2); // y relative to drone in drone coordinate (turns with uav_heading)
+//   rel_load_pose_position[2] = -cable_length*cos(encoder_angle_1)*cos(encoder_angle_2);// z relative to drone in drone coordinate (turns with uav_heading)
 
-  rel_load_pose_position_to_publish.x = rel_load_pose_position[0];
-  rel_load_pose_position_to_publish.y = rel_load_pose_position[1];
-  rel_load_pose_position_to_publish.z = rel_load_pose_position[2];
+//   rel_load_pose_position_to_publish.x = rel_load_pose_position[0];
+//   rel_load_pose_position_to_publish.y = rel_load_pose_position[1];
+//   rel_load_pose_position_to_publish.z = rel_load_pose_position[2];
 
-  publisher_rel_load_pose_position.publish(rel_load_pose_position_to_publish);
-  //ROS_INFO_STREAM("rel load pose position \n" << rel_load_pose_position_to_publish );
+//   publisher_rel_load_pose_position.publish(rel_load_pose_position_to_publish);
+//   //ROS_INFO_STREAM("rel load pose position \n" << rel_load_pose_position_to_publish );
 
-// old erroneous equations :
-  // Difference_load_drone_position[0] = (rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading)); // x relative to drone in absolute coordinate (x_l,W -  x_q,W)
-  // Difference_load_drone_position[1] = (-(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading))); // y relative to drone in absolute coordinate
-  // Difference_load_drone_position[2] = (rel_load_pose_position[2]); // z relative to drone in absolute coordinate
-// New corrected ones :
+// // old erroneous equations :
+//   // Difference_load_drone_position[0] = (rel_load_pose_position[0]*cos(uav_heading) - rel_load_pose_position[1]*sin(uav_heading)); // x relative to drone in absolute coordinate (x_l,W -  x_q,W)
+//   // Difference_load_drone_position[1] = (-(rel_load_pose_position[0]*sin(uav_heading) + rel_load_pose_position[1]*cos(uav_heading))); // y relative to drone in absolute coordinate
+//   // Difference_load_drone_position[2] = (rel_load_pose_position[2]); // z relative to drone in absolute coordinate
+// // New corrected ones :
 
-// Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
+// // Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
 
- Difference_load_drone_position=R*rel_load_pose_position;
+//  Difference_load_drone_position=R*rel_load_pose_position;
 
-  Difference_load_drone_position_to_publish.x = Difference_load_drone_position[0];
-  Difference_load_drone_position_to_publish.y = Difference_load_drone_position[1];
-  Difference_load_drone_position_to_publish.z = Difference_load_drone_position[2];
+//   Difference_load_drone_position_to_publish.x = Difference_load_drone_position[0];
+//   Difference_load_drone_position_to_publish.y = Difference_load_drone_position[1];
+//   Difference_load_drone_position_to_publish.z = Difference_load_drone_position[2];
 
 
-  publisher_Difference_load_drone_position.publish(Difference_load_drone_position_to_publish);
-  //ROS_INFO_STREAM("Difference_load_drone_position \n" << Difference_load_drone_position_to_publish );
+//   publisher_Difference_load_drone_position.publish(Difference_load_drone_position_to_publish);
+//   //ROS_INFO_STREAM("Difference_load_drone_position \n" << Difference_load_drone_position_to_publish );
 
-  //load_pose.position.x = load_pose_position[0];
-  //load_pose.position.y = load_pose_position[1];
-  //load_pose.position.z = load_pose_position[2];
+//   //load_pose.position.x = load_pose_position[0];
+//   //load_pose.position.y = load_pose_position[1];
+//   //load_pose.position.z = load_pose_position[2];
   
-  //ROS_INFO_STREAM("Load Pose \n" << load_pose );
+//   //ROS_INFO_STREAM("Load Pose \n" << load_pose );
   
-  load_lin_vel[0]= encoder_velocity_1*cable_length;
-  load_lin_vel[1]= encoder_velocity_2*cable_length;
-  load_lin_vel[2]= 0;
+//   load_lin_vel[0]= encoder_velocity_1*cable_length;
+//   load_lin_vel[1]= encoder_velocity_2*cable_length;
+//   load_lin_vel[2]= 0;
 }
 // | ------------------------------------------------------------------- | 
 
