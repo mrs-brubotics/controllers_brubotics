@@ -826,7 +826,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   Eigen::Array3d  Kpl = Eigen::Array3d::Zero(3); 
   Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
 
-  if (_type_of_system_ == "1uav_payload"){ 
+  if (_type_of_system_ == "1uav_payload" ||_type_of_system_ == "2uavs_payload" ){ 
     // gains activated
     if (control_reference->use_velocity_horizontal) {
       // gains activated
