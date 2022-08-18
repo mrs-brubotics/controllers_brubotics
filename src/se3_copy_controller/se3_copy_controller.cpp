@@ -92,8 +92,6 @@ private:
   double _uav_mass_;
   double uav_mass_difference_;
 
-  // | ----------------- Load---------------- |
-  double load_mass_;
   // | -------------------------------------- |
 
   // gains that are used and already filtered
@@ -117,69 +115,35 @@ private:
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
-
-
-  // | -----------------------------Load----------------------------- |
   ros::NodeHandle                                    nh_;
   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers;
 
-  ros::Publisher custom_publisher_load_pose;
-  ros::Publisher custom_publisher_load_vel;
-  ros::Publisher custom_publisher_uav_state;
-
-  ros::Publisher publisher_load_position_errors;
-
-  ros::Publisher custom_publisher_load_pose_experiments;
-  ros::Publisher custom_publisher_load_pose_error;
-  ros::Publisher custom_publisher_load_velocity_error;
-  ros::Publisher publisher_encoder_angle_1;
-  ros::Publisher publisher_encoder_angle_2;
-  ros::Publisher publisher_Difference_load_drone_position;
-  ros::Publisher publisher_rel_load_pose_position;
-  ros::Subscriber load_state_sub;
-
-  geometry_msgs::Pose anchoring_pt_pose_;
-  geometry_msgs::Twist anchoring_pt_velocity_;
-  
-  geometry_msgs::Pose load_position_errors;
-
-  geometry_msgs::Vector3 load_pose_error;
-  geometry_msgs::Vector3 load_velocity_error;
-  void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
-  Eigen::Vector3d anchoring_pt_lin_vel_ = Eigen::Vector3d::Zero(3);
-  Eigen::Vector3d anchoring_pt_pose_position_;
-  Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
-  geometry_msgs::Vector3 rel_load_pose_position_to_publish;
-  Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
-  geometry_msgs::Vector3 Difference_load_drone_position_to_publish;
-  geometry_msgs::Vector3 sum_load_pose;
-  geometry_msgs::Vector3 average_load_pose;
-  geometry_msgs::Vector3 sum_drone_pose;
-  geometry_msgs::Vector3 offset;
-  geometry_msgs::Vector3 average_drone_pose;
+  // | ----------------- Load---------------- |
+  double _load_mass_;
+  double _cable_length_;
   bool payload_spawned_ = false;
-  bool remove_offset = true;
-  Eigen::Vector3d load_pose_position_offset = Eigen::Vector3d::Zero(3);
-  std::string run_type;
-  double cable_length;
+  bool remove_offset_ = true;
+    // bool uav_id = false; // false = uav2, true = uav1
+  Eigen::Vector3d load_pose_position_offset_ = Eigen::Vector3d::Zero(3);
+  std::string _run_type_;
+  std::string _type_of_system_; 
+
   float encoder_angle_1;
-  std_msgs::Float64 encoder_angle_1_to_publish;
   float encoder_angle_2;
-  std_msgs::Float64 encoder_angle_2_to_publish;
   float encoder_velocity_1;
   float encoder_velocity_2;
+  std_msgs::Float64 encoder_angle_1_to_publish;
+  std_msgs::Float64 encoder_angle_2_to_publish;
+
+  int counter_angle = 0;
+  std::array<uint8_t, 3> data_payload; //Unused?
+  //|----------------------------------------------|//
+
   double uav_heading;
   Eigen::Matrix3d R;
-  int counter_angle = 0;
-  std::string _type_of_system_; 
-  //merge controller 1 and 2 uavs
-  bool uav_id = false; // false = uav2, true = uav1
   std::string _uav_name_;
-  std::string number_of_uav;
+  // std::string number_of_uav;
   
-  ros::Subscriber data_payload_sub;
-  std::array<uint8_t, 3> data_payload;
-  void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
   // | -----------------------------------------------------------------|
 
   // | ----------------------- gain muting ---------------------- |
@@ -248,7 +212,46 @@ private:
   ros::Publisher pub_thrust_satval_;
   ros::Publisher pub_hover_thrust_;
   ros::Publisher pub_tilt_angle_;;
-  // | ----------------------------------------------------------- |
+
+  // | -----------------------------Load transport----------------------------- |
+
+  ros::Publisher custom_publisher_load_pose;
+  ros::Publisher custom_publisher_load_vel;
+  ros::Publisher custom_publisher_uav_state;
+  ros::Publisher publisher_load_position_errors;
+  ros::Publisher custom_publisher_load_pose_experiments;
+  ros::Publisher custom_publisher_load_pose_error;
+  ros::Publisher custom_publisher_load_velocity_error;
+  ros::Publisher publisher_encoder_angle_1;
+  ros::Publisher publisher_encoder_angle_2;
+  ros::Publisher publisher_Difference_load_drone_position;
+  ros::Publisher publisher_rel_load_pose_position;
+
+  ros::Subscriber load_state_sub;
+  ros::Subscriber data_payload_sub;
+
+  geometry_msgs::Pose anchoring_pt_pose_;
+  geometry_msgs::Twist anchoring_pt_velocity_;
+  geometry_msgs::Pose load_position_errors;
+  geometry_msgs::Vector3 load_pose_error;
+  geometry_msgs::Vector3 load_velocity_error;
+  geometry_msgs::Vector3 rel_load_pose_position_to_publish;
+
+  geometry_msgs::Vector3 Difference_load_drone_position_to_publish;
+  geometry_msgs::Vector3 sum_load_pose;
+  geometry_msgs::Vector3 average_load_pose;
+  geometry_msgs::Vector3 sum_drone_pose;
+  geometry_msgs::Vector3 offset;
+  geometry_msgs::Vector3 average_drone_pose;
+
+  Eigen::Vector3d anchoring_pt_lin_vel_ = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d anchoring_pt_pose_position_;
+  Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
+  Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
+
+
+  void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
+  void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
 
 };
 
@@ -266,16 +269,19 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   ros::NodeHandle nh_(parent_nh, name_space);
 
   common_handlers_ = common_handlers;
-    // | -----------------LOAD---------------- |
-  _uav_mass_       = std::stod(getenv("UAV_MASS"));
-  // | --------------------------------- |
-  // _uav_mass_       = uav_mass; I find it easier to change mass in session file rather than in several files from mrs, what do you think ? Must put a recall in the readme of each test TODO
 
-  _type_of_system_    = getenv("TYPE_OF_SYSTEM"); // Can be : 1uav_no_payload, 1uav_payload, 2uavs_payload, depending on which predictions and controller you want to use.  
-  ROS_INFO("[Se3CopyController]: before if with getenv");
+  // env variables, taken from session.yaml (for simulation) or bash.rc (for hardware tests)
+  _uav_name_       = getenv("UAV_NAME"); //from session.yaml
+  _run_type_       = getenv("RUN_TYPE"); //from session.yaml
+    // | -----------------LOAD---------------- |
+  _uav_mass_       = std::stod(getenv("UAV_MASS")); // _uav_mass_       = uav_mass; I think we must do with the env variables, not sure where the uav_mass in the argument is taken from.
+  _cable_length_   = std::stod(getenv("CABLE_LENGTH")); // is changed inside session.yml to take length cable into account! stod to transform string defined in session to double.
+  _load_mass_      = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
+  // | --------------------------------- |
+  _type_of_system_ = getenv("TYPE_OF_SYSTEM"); // Can be : 1uav_no_payload, 1uav_payload, 2uavs_payload, depending on which predictions and controller you want to use.  
+
 
   ros::Time::waitForValid();
-
   // | ------------------- loading parameters ------------------- |
 
   mrs_lib::ParamLoader param_loader(nh_, "Se3CopyController");
@@ -290,41 +296,31 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   }
 
   param_loader.loadParam("enable_profiler", _profiler_enabled_);
-
   // lateral gains
   param_loader.loadParam("default_gains/horizontal/kp", kpxy_);
   param_loader.loadParam("default_gains/horizontal/kv", kvxy_);
   param_loader.loadParam("default_gains/horizontal/ka", kaxy_);
-
   param_loader.loadParam("default_gains/horizontal/kiw", kiwxy_);
   param_loader.loadParam("default_gains/horizontal/kib", kibxy_);
-
   // Lateral gains for load damping part of the controller
   param_loader.loadParam("default_gains/horizontal/kpl", kplxy_);
   param_loader.loadParam("default_gains/horizontal/kvl", kvlxy_);
-
   // | ------------------------- rampup ------------------------- |
-
   param_loader.loadParam("rampup/enabled", _rampup_enabled_);
   param_loader.loadParam("rampup/speed", _rampup_speed_);
-
   // height gains
   param_loader.loadParam("default_gains/vertical/kp", kpz_);
   param_loader.loadParam("default_gains/vertical/kv", kvz_);
   param_loader.loadParam("default_gains/vertical/ka", kaz_);
-
   // attitude gains
   param_loader.loadParam("default_gains/horizontal/attitude/kq", kqxy_);
   param_loader.loadParam("default_gains/vertical/attitude/kq", kqz_);
-
   // mass estimator
   param_loader.loadParam("default_gains/mass_estimator/km", km_);
   param_loader.loadParam("default_gains/mass_estimator/km_lim", km_lim_);
-
   // integrator limits
   param_loader.loadParam("default_gains/horizontal/kiw_lim", kiwxy_lim_);
   param_loader.loadParam("default_gains/horizontal/kib_lim", kibxy_lim_);
-
   // constraints
   param_loader.loadParam("constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
   param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
@@ -334,19 +330,14 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   }
 
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_.data);
-
   // gain filtering
   param_loader.loadParam("gains_filter/perc_change_rate", _gains_filter_change_rate_);
   param_loader.loadParam("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
-
   // gain muting
   param_loader.loadParam("gain_mute_coefficient", _gain_mute_coefficient_);
-
   // output mode
   param_loader.loadParam("output_mode", output_mode_);
-
   param_loader.loadParam("rotation_matrix", drs_params_.rotation_type);
-
   // angular rate feed forward
   param_loader.loadParam("angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
   param_loader.loadParam("angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
@@ -368,8 +359,8 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
 
   // initialize the integrals
   uav_mass_difference_ = 0;
-  Iw_w_                = Eigen::Vector2d::Zero(2);
-  Ib_b_                = Eigen::Vector2d::Zero(2);
+  Iw_w_                = Eigen::Vector2d::Zero(2); //World integral
+  Ib_b_                = Eigen::Vector2d::Zero(2); //Body integral, see ctu-mrs paper for more details.
 
   // custom publisher
   custom_publisher_projected_thrust_ = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
@@ -381,14 +372,12 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   pub_tilt_angle_            = nh_.advertise<std_msgs::Float64>("tilt_angle",1);
 
   // | -----------------LOAD---------------- |
-  run_type = getenv("RUN_TYPE");
-  if (run_type == "simulation")
+  if (_run_type_ == "simulation") //When in simulation, anchoringpoint/load information is not published on the same topic
   {
     custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
     custom_publisher_load_vel   = nh_.advertise<geometry_msgs::Twist>("load_vel",1);
     custom_publisher_uav_state   = nh_.advertise<mrs_msgs::UavState>("uav_state",1);
-
-    publisher_load_position_errors = nh_.advertise<geometry_msgs::Pose>("load_position_errors",1);
+    publisher_load_position_errors = nh_.advertise<geometry_msgs::Pose>("load_position_errors",1); //Might be useless if we do this computation in matlab as in the RAL plots.
   }else{
     //publisher for encoders when doing real experiment
     custom_publisher_load_pose_experiments   = nh_.advertise<geometry_msgs::Vector3>("load_pose_position",1);
@@ -400,7 +389,6 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     publisher_rel_load_pose_position = nh_.advertise<geometry_msgs::Vector3>("rel_load_pose_position",1);
   }
   // | --------------------------------- |
-
 
   // | --------------- dynamic reconfigure server --------------- |
 
@@ -517,7 +505,6 @@ void Se3CopyController::deactivate(void) {
 }
 
 //}
-
 /* //{ update() */
 
 const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_msgs::UavState::ConstPtr&        uav_state,
@@ -539,7 +526,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
   
-
   // | -------------------- calculate the dt -------------------- |
 
   double dt;
@@ -575,29 +561,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   }
 
   // | -----------------LOAD---------------- |
-
   custom_publisher_uav_state.publish(uav_state_); 
-  _uav_name_ = getenv("UAV_NAME");
-  // to see how many UAVs there are
-   
-  if (run_type == "simulation"){
-    number_of_uav = getenv("NUMBER_OF_UAV"); // is exported in the session.yaml
-    if (number_of_uav == "2")
-    {
-      // to see which UAV it is
-      if (_uav_name_ == "uav1")
-      {
-        uav_id = true; //uav 1
-      }else{
-        uav_id = false; //uav 2
-      }
-    }
-  }
-  //ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
-  std::string slash = "/";
-  //ROS_INFO_STREAM("UAV_NAME \n" << run_type  );
 
-  if (run_type == "simulation")
+  std::string slash = "/";
+
+  if (_run_type_ == "simulation") //Depending on the runtype, subscribe to the correct topic to receive the state of the payload/anchoring point.
   {
     // subscriber of the simulation
     load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3CopyController::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
@@ -606,15 +574,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     data_payload_sub = nh_.subscribe("/nuc4/serial/received_message", 1, &Se3CopyController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
     //slash.append(_uav_name_.append("/serial/received_message"))
   }
-  // ROS_INFO_STREAM("RUN_TYPE \n" << run_type );
-
-  // | --------------------------------- |
-
 
   // | ----------------- get the current heading ---------------- |
-
   uav_heading = 0;
-
   try {
     uav_heading = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeading();
   }
@@ -685,7 +647,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
 
   // | -------------- calculate the control errors -------------- |
-
   // position control error
   Eigen::Vector3d Ep = Eigen::Vector3d::Zero(3);
 
@@ -702,7 +663,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   }
 
 // | --------------------------LOAD--------------------------|
-
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
   // --------------------------------------------------------------
@@ -717,31 +677,28 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   Eigen::Vector3d Ovl(anchoring_pt_lin_vel_[0], anchoring_pt_lin_vel_[1], anchoring_pt_lin_vel_[2]);
   Eigen::Vector3d Epl = Eigen::Vector3d::Zero(3); // Load position control error
   Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3); // Load velocity control error
-  cable_length = std::stod(getenv("CABLE_LENGTH")); // is changed inside session.yml to take length cable into account! stod to transform string defined in session to double.
 
-
-
-  if (run_type == "simulation"){
+  if (_run_type_ == "simulation"){
     if(payload_spawned_){
-      if(remove_offset){
+      if(remove_offset_){
         Epl = Op-Opl ;
-        load_pose_position_offset = Epl;
-        remove_offset = false;
+        load_pose_position_offset_ = Epl;
+        remove_offset_ = false;
       } 
     }
 
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-      Epl = Op - Opl - load_pose_position_offset; // remove offset because the load does not spawn perfectly under drone
+      Epl = Op - Opl - load_pose_position_offset_; // remove offset because the load does not spawn perfectly under drone
       //(position relative to base frame)// 2021 student said this : Op - Opl is super unstable!! However, this is the way Pandolfo thesis explained it. And I think what they did (Rp - Opl) will always be more unstable, as for a very far references, the control actions of the error of the UAV and the one of the Payload will superpose and generate a huge Td, which can easilly saturates the actuators and creates instability. 
     }
 
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
       Evl = Ov - Ovl;
-      //(speed relative to base frame)
+      //(speed relative to world frame)
     }
   }else{
-    
+    //TODO implement FK from encoder angles to absolute position of the anchoring point.
     // if(counter_angle < 500){
     //   counter_angle = counter_angle +1;
     //   load_pose_position.x = Op[0] + Difference_load_drone_position[0];
@@ -800,70 +757,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   }
   
-
-  // 2e method pandolfo
-  Eigen::Array3d  Kpl = Eigen::Array3d::Zero(3); 
-  Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
-
-  if (_type_of_system_ == "1uav_payload"){ 
-    // gains activated
-    if (control_reference->use_velocity_horizontal) {
-      // gains activated
-      Kpl[0] = kplxy_; //7.0
-      Kpl[1] = Kpl[0];
-    } else {
-      Kpl[0] = 0;
-      Kpl[1] = 0;
-    }
-
-    if (control_reference->use_velocity_horizontal) {
-      Kdl[0] = kvlxy_; //0.5
-      Kdl[1] = Kdl[0];
-    } else {
-      Kdl[0] = 0;
-      Kdl[1] = 0;
-    }
-
-    //ROS_INFO_STREAM("gains" << std::endl << "activated");
-  }else{
-    // gains desactivated as no payload
-    if (control_reference->use_velocity_horizontal) {
-      Kpl[0] = 0.0; //7.0
-      Kpl[1] = Kpl[0];
-    } else {
-      Kpl[0] = 0;
-      Kpl[1] = 0;
-    }
-
-    if (control_reference->use_velocity_horizontal) {
-      Kdl[0] = 0.0; //0.5
-      Kdl[1] = Kdl[0];
-    } else {
-      Kdl[0] = 0;
-      Kdl[1] = 0;
-    }
-
-    //ROS_INFO_STREAM("gains" << std::endl << "desactivated");
-  }
-    // ROS_INFO_STREAM("gains load pos" <<  Kpl);
-    // ROS_INFO_STREAM("gains load vel" <<  Kdl);
-
-  if (control_reference->use_velocity_vertical) {
-    Kpl[2] = 0;
-  }
-  else {
-    Kpl[2] = 0;
-  }
-
-  if (control_reference->use_velocity_vertical) {
-    Kdl[2] = 0;
-  } 
-  else {
-    Kdl[2] = 0;
-  }
-  // | ---------------------------------------------------------------------------|
-
-  // | --------------------- load the gains --------------------- |
+// | --------------------- load the gains --------------------- |
 
   filterGains(control_reference->disable_position_gains, dt);
 
@@ -914,8 +808,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     // because we need to control the attitude.
     Kq << kqxy_, kqxy_, kqz_;
   }
-
-  // a print to test if the gains change so you know where to change:
+    // a print to test if the gains change so you know where to change:
   // ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Ka_x = %f", Ka(0));
   // ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Ka_y = %f", Ka(1));
   // ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Ka_z = %f", Ka(2));
@@ -929,33 +822,78 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_y = %f", Kv(1));
   // ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_z = %f", Kv(2));
 
+  // Load the gains for the  2e method of pandolfo: Anchoring point realignment
+  Eigen::Array3d  Kpl = Eigen::Array3d::Zero(3); 
+  Eigen::Array3d  Kdl = Eigen::Array3d::Zero(3); 
 
-// | -----------------LOAD--------------------------|
+  if (_type_of_system_ == "1uav_payload"){ 
+    // gains activated
+    if (control_reference->use_velocity_horizontal) {
+      // gains activated
+      Kpl[0] = kplxy_; //7.0
+      Kpl[1] = Kpl[0];
+    } else {
+      Kpl[0] = 0;
+      Kpl[1] = 0;
+    }
 
-  load_mass_ = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
-  // uav_mass_difference_ = 0; 
+    if (control_reference->use_velocity_horizontal) {
+      Kdl[0] = kvlxy_; //0.5
+      Kdl[1] = Kdl[0];
+    } else {
+      Kdl[0] = 0;
+      Kdl[1] = 0;
+    }
+    //ROS_INFO_STREAM("gains" << std::endl << "activated");
+  }else{
+    // gains desactivated as no payload
+    if (control_reference->use_velocity_horizontal) {
+      Kpl[0] = 0.0; //7.0
+      Kpl[1] = Kpl[0];
+    } else {
+      Kpl[0] = 0;
+      Kpl[1] = 0;
+    }
+
+    if (control_reference->use_velocity_horizontal) {
+      Kdl[0] = 0.0; //0.5
+      Kdl[1] = Kdl[0];
+    } else {
+      Kdl[0] = 0;
+      Kdl[1] = 0;
+    }
+    //Do not try to compensate the anchoring point position/speed in the z direction, so its gains are kept on zero
+    //ROS_INFO_STREAM("gains" << std::endl << "desactivated");
+  }
+    // ROS_INFO_STREAM("gains load pos" <<  Kpl);
+    // ROS_INFO_STREAM("gains load vel" <<  Kdl);
+  // | ---------------------------------------------------------------------------|
+
   //ROS_INFO_STREAM("UAV_massInfo \n" << _uav_mass_ ); // _uav_mass_ is given in session file
+  //Compute the total mass of the system (depending on if there is a payload being transported or not). Note that in the 2UAV case, _load_mass_ is half of the mass of the beam payload. Which means it is the mass each UAV will have to lift. 
   double total_mass = 0;
-  if(_type_of_system_ == "1uav_payload"){
-    if (run_type == "simulation"){ 
+  if(_type_of_system_ == "1uav_payload"||_type_of_system_ == "2uavs_payload" ){
+    if (_run_type_ == "simulation"){ 
       if(payload_spawned_){
-        total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;
+        total_mass = _uav_mass_ + _load_mass_ + uav_mass_difference_ ;
         //ROS_INFO_STREAM("Mass spwaned" << std::endl << total_mass);
       }else{
         total_mass = _uav_mass_ + uav_mass_difference_ ;
         //ROS_INFO_STREAM("Mass NOT spwaned" << std::endl << total_mass);
       }
     }else{
-      total_mass = _uav_mass_ + load_mass_ + uav_mass_difference_ ;  // TODONeed to solve that for hardware test as no load_mass.
+      total_mass = _uav_mass_ + _load_mass_ + uav_mass_difference_ ;  // TODONeed to solve that for hardware test as no load_mass.
     }
   }else{
     total_mass = _uav_mass_ + uav_mass_difference_;
   }
-  // ROS_INFO_STREAM("Se3BruboticsLoadController: total mass = \n" << total_mass );// Ouputs well the UAV mass when no payload, and the UAV+payload mass when the payload has spawned
 
   Kp = Kp * total_mass;
   Kv = Kv * total_mass;
-
+  // | --------------------------LOAD---------------------- |
+  //Scale the gains with the total mass of the system.
+  Kpl = Kpl *total_mass;
+  Kdl = Kdl *total_mass;
 // |------------------------------------------------|
 
   // ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_x*m = %f", Kp(0));
@@ -975,19 +913,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.A = \n" << common_handlers_->motor_params.A);
   // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.B = \n" << common_handlers_->motor_params.B);
 
-
-  // | --------------------------LOAD---------------------- |
-
-  //2e method pandolfo
-  Kpl = Kpl *total_mass;
-  Kdl = Kdl *total_mass;
-  
-  // | -------------------------------------------------------|
-
-
-
   // | --------------- desired orientation matrix --------------- |
-
   // get body integral in the world frame
 
   Eigen::Vector2d Ib_w = Eigen::Vector2d(0, 0);
@@ -1016,14 +942,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   // double total_mass = _uav_mass_ + uav_mass_difference_;
 
-  Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g) + Ra);
-  Eigen::Vector3d position_feedback = -Kp * Ep.array();
-  Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
-  Eigen::Vector3d integral_feedback;
-
   // | ------------------------- LOAD-------------------------- |  
 
-  if (run_type == "simulation"){ 
+  if (_run_type_ == "simulation"){ 
     for (int i = 0; i < 3; i++) // in order to set the error to 0 befor the load spawn
     {
       if(!payload_spawned_)
@@ -1031,7 +952,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         Epl = Epl*0;
         Evl = Evl*0;
       }
-      if(payload_spawned_ && abs(Epl[i]) < 0.05)
+      if(payload_spawned_ && abs(Epl[i]) < 0.05) //When the payload is very close to equilibrium vertical position, the error is desactivated so the UAV don't try to compensate and let it damp naturally.
       {
         Epl[i] = Epl[i]*0;
       }
@@ -1052,20 +973,25 @@ load_position_errors.position.z=Epl[2];
   }
 // 
 
+// Compute control actions 
 
-  //Eigen::Vector3d velocity_load_feedback = -Klv * load_lin_vel.array();
-  Eigen::Vector3d position_load_feedback = -Kpl * Epl.array();
-  Eigen::Vector3d velocity_load_feedback = -Kdl * Evl.array();
-
-  // |---------------------------------------------------| 
-
+  Eigen::Vector3d feed_forward      = total_mass * (Eigen::Vector3d(0, 0, common_handlers_->g) + Ra);
+  Eigen::Vector3d position_feedback = -Kp * Ep.array();
+  Eigen::Vector3d velocity_feedback = -Kv * Ev.array();
+  Eigen::Vector3d integral_feedback;
   {
     std::scoped_lock lock(mutex_integrals_);
 
     integral_feedback << Ib_w[0] + Iw_w_[0], Ib_w[1] + Iw_w_[1], 0;
   }
 
-// | -------------------------------se3+LOAD------------------------ | 
+  Eigen::Vector3d position_load_feedback = -Kpl * Epl.array();
+  Eigen::Vector3d velocity_load_feedback = -Kdl * Evl.array();
+
+  // |---------------------------------------------------| 
+
+
+// | -------------------------------se3+load------------------------ | 
   Eigen::Vector3d f = position_load_feedback + velocity_load_feedback + position_feedback + velocity_feedback + integral_feedback + feed_forward;
 // | -------------------------------------------------------------| 
   // ROS_INFO_THROTTLE(1,"Controller : fx= %.2f,fy= %.2f, fz=%.2f ",f[0],f[1],f[2]);
