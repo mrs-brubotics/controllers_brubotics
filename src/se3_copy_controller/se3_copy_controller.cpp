@@ -60,26 +60,87 @@ public:
   const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr setConstraints(const mrs_msgs::DynamicsConstraintsSrvRequest::ConstPtr& cmd);
 
 private:
-  std::string _version_;
-
-  bool is_initialized_ = false;
-  bool is_active_      = false;
-
+  ros::NodeHandle                                    nh_;
   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
 
-  // | ------------------------ uav state ----------------------- |
-
-  mrs_msgs::UavState uav_state_;
-  std::mutex         mutex_uav_state_;
-
-  // | --------------- dynamic reconfigure server --------------- |
-
+  // | ------------------- declaring env (session/bashrc) parameters ------------------- |
+  std::string _uav_name_;       // uavID
+  std::string _run_type_;       // set to "simulation" (for Gazebo simulation) OR "uav" (for hardware testing) defined in bashrc or session.yaml. Used for payload transport as payload position comes from two different callbacks depending on how the test is ran (in sim or on real UAV).
+  std::string _type_of_system_; // defines the dynamic system model to simulate in the prediction using the related controller: can be 1uav_no_payload, 1uav_payload or 2uavs_payload. Set in session.yaml file.
+  double _cable_length_;        // length of the cable between payload COM / anchoring point and COM of the UAV
+  double _load_mass_;           // feedforward load mass defined in the session.yaml of every test file (session variable also used by the xacro for Gazebo simulation)
+  
+  // | ------------------- declaring .yaml parameters (and some related vars & funs) ------------------- |
+  // Se3CopyController:
+  std::string _version_;
+  bool   _profiler_enabled_ = false;
+  double kpxy_;       // position xy gain
+  double kvxy_;       // velocity xy gain
+  double kplxy_;      // load position xy gain
+  double kvlxy_;      // load velocity xy gain
+  double kaxy_;       // acceleration xy gain (feed forward, =1)
+  double kiwxy_;      // world xy integral gain
+  double kibxy_;      // body xy integral gain
+  double kiwxy_lim_;  // world xy integral limit
+  double kibxy_lim_;  // body xy integral limit
+  double kpz_;        // position z gain
+  double kvz_;        // velocity z gain
+  double kaz_;        // acceleration z gain (feed forward, =1)
+  double km_;         // mass estimator gain
+  double km_lim_;     // mass estimator limit
+  double kqxy_;       // pitch/roll attitude gain
+  double kqz_;        // yaw attitude gain
+  bool   _tilt_angle_failsafe_enabled_;
+  double _tilt_angle_failsafe_;
+  //double _thrust_saturation_; // total thrust limit in [0,1]
+  std_msgs::Float64 _thrust_saturation_; // TODO: make tracker and controller same in how type of _thrust_saturation_ is chosen
+  // rampup:
+  bool   _rampup_enabled_ = false;
+  double _rampup_speed_;
+  bool      rampup_active_ = false;
+  double    rampup_thrust_;
+  int       rampup_direction_;
+  double    rampup_duration_;
+  ros::Time rampup_start_time_;
+  ros::Time rampup_last_time_;
+  // gains filtering:
+  void filterGains(const bool mute_gains, const double dt);
+  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated);
+  double _gains_filter_change_rate_;
+  double _gains_filter_min_change_rate_;
+  // output mode:
+  int    output_mode_;  // attitude_rate / quaternion
+  std::mutex mutex_output_mode_;
+  // gain muting:
+  bool   gains_muted_ = false;  // the current state (may be initialized in activate())
+  double _gain_mute_coefficient_;
+  // dynamic reconfigure server:
   boost::recursive_mutex                            mutex_drs_;
   typedef mrs_uav_controllers::se3_controllerConfig DrsConfig_t;
   typedef dynamic_reconfigure::Server<DrsConfig_t>  Drs_t;
   boost::shared_ptr<Drs_t>                          drs_;
   void                                              callbackDrs(mrs_uav_controllers::se3_controllerConfig& config, uint32_t level);
   DrsConfig_t                                       drs_params_;
+  std::mutex mutex_gains_;       // locks the gains the are used and filtered
+  std::mutex mutex_drs_params_;  // locks the gains that came from the drs
+
+
+
+
+
+
+
+  bool is_initialized_ = false;
+  bool is_active_      = false;
+
+  
+
+  // | ------------------------ uav state ----------------------- |
+
+  mrs_msgs::UavState uav_state_;
+  std::mutex         mutex_uav_state_;
+
+
 
   // | ----------------------- constraints ---------------------- |
 
@@ -94,39 +155,17 @@ private:
 
   // | -------------------------------------- |
 
-  // gains that are used and already filtered
-  double kpxy_;       // position xy gain
-  double kvxy_;       // velocity xy gain
-  double kplxy_;      // position xy gain for the payload controller
-  double kvlxy_;      // velocity xy gain for the payload controller
-  double kaxy_;       // acceleration xy gain (feed forward, =1)
-  double kiwxy_;      // world xy integral gain
-  double kibxy_;      // body xy integral gain
-  double kiwxy_lim_;  // world xy integral limit
-  double kibxy_lim_;  // body xy integral limit
-  double kpz_;        // position z gain
-  double kvz_;        // velocity z gain
-  double kaz_;        // acceleration z gain (feed forward, =1)
-  double km_;         // mass estimator gain
-  double km_lim_;     // mass estimator limit
-  double kqxy_;       // pitch/roll attitude gain
-  double kqz_;        // yaw attitude gain
 
-  std::mutex mutex_gains_;       // locks the gains the are used and filtered
-  std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
-  ros::NodeHandle                                    nh_;
-  std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers;
+
+ 
 
   // | ----------------- Load---------------- |
-  double _load_mass_;
-  double _cable_length_;
   bool payload_spawned_ = false;
   bool remove_offset_ = true;
     // bool uav_id = false; // false = uav2, true = uav1
   Eigen::Vector3d load_pose_position_offset_ = Eigen::Vector3d::Zero(3);
-  std::string _run_type_;
-  std::string _type_of_system_; 
+  
 
   float encoder_angle_1;
   float encoder_angle_2;
@@ -141,31 +180,15 @@ private:
 
   double uav_heading;
   Eigen::Matrix3d R;
-  std::string _uav_name_;
+ 
   // std::string number_of_uav;
   
   // | -----------------------------------------------------------------|
 
-  // | ----------------------- gain muting ---------------------- |
 
-  bool   gains_muted_ = false;  // the current state (may be initialized in activate())
-  double _gain_mute_coefficient_;
 
-  // | --------------------- gain filtering --------------------- |
+ 
 
-  void filterGains(const bool mute_gains, const double dt);
-
-  double calculateGainChange(const double dt, const double current_value, const double desired_value, const bool bypass_rate, std::string name, bool& updated);
-
-  double _gains_filter_change_rate_;
-  double _gains_filter_min_change_rate_;
-
-  // | ------------ controller limits and saturations ----------- |
-
-  bool   _tilt_angle_failsafe_enabled_;
-  double _tilt_angle_failsafe_;
-
-  std_msgs::Float64 _thrust_saturation_;
 
   // | ------------------ activation and output ----------------- |
 
@@ -177,13 +200,12 @@ private:
 
   // | ----------------------- output mode ---------------------- |
 
-  int        output_mode_;  // attitude_rate / acceleration
-  std::mutex mutex_output_mode_;
+
 
   // | ------------------------ profiler_ ------------------------ |
 
   mrs_lib::Profiler profiler_;
-  bool              _profiler_enabled_ = false;
+
 
   // | ------------------------ integrals ----------------------- |
 
@@ -191,17 +213,7 @@ private:
   Eigen::Vector2d Iw_w_;  // world error integral in the world_frame
   std::mutex      mutex_integrals_;
 
-  // | ------------------------- rampup ------------------------- |
 
-  bool   _rampup_enabled_ = false;
-  double _rampup_speed_;
-
-  bool      rampup_active_ = false;
-  double    rampup_thrust_;
-  int       rampup_direction_;
-  double    rampup_duration_;
-  ros::Time rampup_start_time_;
-  ros::Time rampup_last_time_;
 
   // | ----------------------custom publishers------------------ |
 
@@ -249,7 +261,7 @@ private:
   Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
 
-
+  // TODO: bryan think how we can make library to use these function in both controller and tracker if exactly same
   void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
   void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
 
@@ -266,82 +278,79 @@ private:
 void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space, const double uav_mass,
                                std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
   ROS_INFO("[Se3CopyController]: start of initialize");
-  ros::NodeHandle nh_(parent_nh, name_space);
-
+  _uav_mass_ = uav_mass;
   common_handlers_ = common_handlers;
-
-  // env variables, taken from session.yaml (for simulation) or bash.rc (for hardware tests)
-  _uav_name_       = getenv("UAV_NAME"); //from session.yaml
-  _run_type_       = getenv("RUN_TYPE"); //from session.yaml
-    // | -----------------LOAD---------------- |
-  _uav_mass_       = std::stod(getenv("UAV_MASS")); // _uav_mass_       = uav_mass; I think we must do with the env variables, not sure where the uav_mass in the argument is taken from.
-  _cable_length_   = std::stod(getenv("CABLE_LENGTH")); // is changed inside session.yml to take length cable into account! stod to transform string defined in session to double.
-  _load_mass_      = std::stod(getenv("LOAD_MASS")); // can be changed in session.yml file. To take mass load into account! stod to transform string defined in session to double
-  // | --------------------------------- |
-  _type_of_system_ = getenv("TYPE_OF_SYSTEM"); // Can be : 1uav_no_payload, 1uav_payload, 2uavs_payload, depending on which predictions and controller you want to use.  
-
-
+  ros::NodeHandle nh_(parent_nh, name_space);
   ros::Time::waitForValid();
-  // | ------------------- loading parameters ------------------- |
-
-  mrs_lib::ParamLoader param_loader(nh_, "Se3CopyController");
-
-  param_loader.loadParam("version", _version_);
-
-  if (_version_ != VERSION) {
-
-    ROS_ERROR("[Se3CopyController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
-    ros::requestShutdown(); // Should be the same as below but cleaner
-    // ros::shutdown();
+  
+  // | ------------------- loading env (session/bashrc) parameters ------------------- |
+  ROS_INFO("[Se3CopyController]: start loading environment (session/bashrc) parameters");
+  _uav_name_       = getenv("UAV_NAME"); // TODO: ask ctu if they can allow uav_name as an argument of the inititalize function as done in the trackers.h. So then we do not need to specify the UAV IDs anymore to enable 2UAV cooperative load transport.
+  //_uav_mass_       = std::stod(getenv("UAV_MASS")); // _uav_mass_       = uav_mass; I think we must do with the env variables, not sure where the uav_mass in the argument is taken from.
+  _run_type_       = getenv("RUN_TYPE"); 
+  _type_of_system_ = getenv("TYPE_OF_SYSTEM"); 
+  if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){ // load the required load transportation paramters only if the test is configured for it
+    _cable_length_      = std::stod(getenv("CABLE_LENGTH")); 
+    _load_mass_         = std::stod(getenv("LOAD_MASS")); 
   }
+  ROS_INFO("[Se3CopyController]: finished loading environment (session/bashrc) parameters");
 
+  // | ------------------- loading .yaml parameters ------------------- |
+  mrs_lib::ParamLoader param_loader(nh_, "Se3CopyController");
+  param_loader.loadParam("version", _version_);
+  if (_version_ != VERSION) {
+    ROS_ERROR("[Se3CopyController]: the version of the binary (%s) does not match the config file (%s), please build me!", VERSION, _version_.c_str());
+    ros::requestShutdown();
+  }
   param_loader.loadParam("enable_profiler", _profiler_enabled_);
-  // lateral gains
+  // lateral gains and limits:
   param_loader.loadParam("default_gains/horizontal/kp", kpxy_);
   param_loader.loadParam("default_gains/horizontal/kv", kvxy_);
   param_loader.loadParam("default_gains/horizontal/ka", kaxy_);
   param_loader.loadParam("default_gains/horizontal/kiw", kiwxy_);
   param_loader.loadParam("default_gains/horizontal/kib", kibxy_);
-  // Lateral gains for load damping part of the controller
+  param_loader.loadParam("default_gains/horizontal/kiw_lim", kiwxy_lim_);
+  param_loader.loadParam("default_gains/horizontal/kib_lim", kibxy_lim_);
+  // Lateral gains for load damping part of the controller:
   param_loader.loadParam("default_gains/horizontal/kpl", kplxy_);
   param_loader.loadParam("default_gains/horizontal/kvl", kvlxy_);
-  // | ------------------------- rampup ------------------------- |
-  param_loader.loadParam("rampup/enabled", _rampup_enabled_);
-  param_loader.loadParam("rampup/speed", _rampup_speed_);
-  // height gains
+  // vertical gains:
   param_loader.loadParam("default_gains/vertical/kp", kpz_);
   param_loader.loadParam("default_gains/vertical/kv", kvz_);
   param_loader.loadParam("default_gains/vertical/ka", kaz_);
-  // attitude gains
-  param_loader.loadParam("default_gains/horizontal/attitude/kq", kqxy_);
-  param_loader.loadParam("default_gains/vertical/attitude/kq", kqz_);
-  // mass estimator
+  // mass estimator (vertical) gains and limits:
   param_loader.loadParam("default_gains/mass_estimator/km", km_);
   param_loader.loadParam("default_gains/mass_estimator/km_lim", km_lim_);
-  // integrator limits
-  param_loader.loadParam("default_gains/horizontal/kiw_lim", kiwxy_lim_);
-  param_loader.loadParam("default_gains/horizontal/kib_lim", kibxy_lim_);
-  // constraints
+  // attitude gains:
+  param_loader.loadParam("default_gains/horizontal/attitude/kq", kqxy_);
+  param_loader.loadParam("default_gains/vertical/attitude/kq", kqz_);
+  // constraints:
   param_loader.loadParam("constraints/tilt_angle_failsafe/enabled", _tilt_angle_failsafe_enabled_);
   param_loader.loadParam("constraints/tilt_angle_failsafe/limit", _tilt_angle_failsafe_);
   if (_tilt_angle_failsafe_enabled_ && fabs(_tilt_angle_failsafe_) < 1e-3) {
     ROS_ERROR("[Se3CopyController]: constraints/tilt_angle_failsafe/enabled = 'TRUE' but the limit is too low");
     ros::requestShutdown();
   }
-
   param_loader.loadParam("constraints/thrust_saturation", _thrust_saturation_.data);
-  // gain filtering
+  // TODO bryan: organize the yaml paramter declaration starting from here:
+  // rampup:
+  param_loader.loadParam("rampup/enabled", _rampup_enabled_);
+  param_loader.loadParam("rampup/speed", _rampup_speed_);
+  // gain filtering:
   param_loader.loadParam("gains_filter/perc_change_rate", _gains_filter_change_rate_);
   param_loader.loadParam("gains_filter/min_change_rate", _gains_filter_min_change_rate_);
-  // gain muting
+  // gain muting:
   param_loader.loadParam("gain_mute_coefficient", _gain_mute_coefficient_);
-  // output mode
+  // output mode:
   param_loader.loadParam("output_mode", output_mode_);
+  if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
+    ROS_ERROR("[Se3CopyController]: output mode has to be {0, 1}!");
+    ros::requestShutdown();
+  }
   param_loader.loadParam("rotation_matrix", drs_params_.rotation_type);
-  // angular rate feed forward
+  // angular rate feed forward:
   param_loader.loadParam("angular_rate_feedforward/parasitic_pitch_roll", drs_params_.pitch_roll_heading_rate_compensation);
   param_loader.loadParam("angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
-
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[Se3CopyController]: could not load all parameters!");
     ros::requestShutdown();
@@ -350,19 +359,10 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     ROS_INFO("[Se3CopyController]: correctly loaded all Se3CopyController parameters!");
   }
 
-  // | ---------------- prepare stuff from params --------------- |
 
-  if (!(output_mode_ == OUTPUT_ATTITUDE_RATE || output_mode_ == OUTPUT_ATTITUDE_QUATERNION)) {
-    ROS_ERROR("[Se3CopyController]: output mode has to be {0, 1}!");
-    ros::requestShutdown();
-  }
-
-  // initialize the integrals
-  uav_mass_difference_ = 0;
-  Iw_w_                = Eigen::Vector2d::Zero(2); //World integral
-  Ib_b_                = Eigen::Vector2d::Zero(2); //Body integral, see ctu-mrs paper for more details.
-
-  // custom publisher
+  // | ------------------- create publishers ------------------- |
+   // TODO bryan: change below to correct msg types (e.g., do not use PoseArray for a thrust or angle)
+  // UAV:
   custom_publisher_projected_thrust_ = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
   custom_publisher_thrust_           = nh_.advertise<std_msgs::Float64>("custom_thrust",1);
   pub_thrust_satlimit_physical_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit_physical",1);
@@ -371,7 +371,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   pub_hover_thrust_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
   pub_tilt_angle_            = nh_.advertise<std_msgs::Float64>("tilt_angle",1);
 
-  // | -----------------LOAD---------------- |
+  // LOAD:
   if (_run_type_ == "simulation") //When in simulation, anchoringpoint/load information is not published on the same topic
   {
     custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
@@ -389,6 +389,13 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     publisher_rel_load_pose_position = nh_.advertise<geometry_msgs::Vector3>("rel_load_pose_position",1);
   }
   // | --------------------------------- |
+
+  // | ---------------- prepare stuff from params --------------- |
+
+  // initialize the integrals
+  uav_mass_difference_ = 0;
+  Iw_w_                = Eigen::Vector2d::Zero(2); //World integral
+  Ib_b_                = Eigen::Vector2d::Zero(2); //Body integral, see ctu-mrs paper for more details.
 
   // | --------------- dynamic reconfigure server --------------- |
 
