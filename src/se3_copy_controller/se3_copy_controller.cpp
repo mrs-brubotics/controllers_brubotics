@@ -125,7 +125,33 @@ private:
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
 
 
+  // ---------------
+  // ROS Publishers:
+  // ---------------
+  //|-----------------------------UAV--------------------------------|//
+  ros::Publisher uav_state_publisher_; // TODO: already publishing to this in Tracker!
+  ros::Publisher projected_thrust_publisher_;
+  ros::Publisher thrust_publisher_;
+  ros::Publisher thrust_satlimit_publisher_;
+  ros::Publisher thrust_satlimit_physical_publisher_;
+  ros::Publisher thrust_satval_publisher_;
+  ros::Publisher hover_thrust_publisher_;
+  ros::Publisher tilt_angle_publisher_;
+  //|-----------------------------LOAD--------------------------------|//
+  ros::Publisher load_pose_publisher_;
+  ros::Publisher load_vel_publisher_;
+  ros::Publisher load_position_errors_publisher_;
+  // ros::Publisher load_pose_experiments_publisher_;
+  // ros::Publisher load_pose_error_publisher_;
+  // ros::Publisher load_velocity_error_publisher_;
+  // ros::Publisher encoder_angle_1_publisher_;
+  // ros::Publisher encoder_angle_2_publisher_;
 
+  // ---------------
+  // ROS Subscribers:
+  // ---------------
+  ros::Subscriber load_state_sub;
+  ros::Subscriber data_payload_sub;
 
 
 
@@ -215,32 +241,16 @@ private:
 
 
 
-  // | ----------------------custom publishers------------------ |
 
-  ros::Publisher custom_publisher_projected_thrust_;
-  ros::Publisher custom_publisher_thrust_;
-  ros::Publisher pub_thrust_satlimit_;
-  ros::Publisher pub_thrust_satlimit_physical_;
-  ros::Publisher pub_thrust_satval_;
-  ros::Publisher pub_hover_thrust_;
-  ros::Publisher pub_tilt_angle_;;
 
   // | -----------------------------Load transport----------------------------- |
 
-  ros::Publisher custom_publisher_load_pose;
-  ros::Publisher custom_publisher_load_vel;
-  ros::Publisher custom_publisher_uav_state;
-  ros::Publisher publisher_load_position_errors;
-  ros::Publisher custom_publisher_load_pose_experiments;
-  ros::Publisher custom_publisher_load_pose_error;
-  ros::Publisher custom_publisher_load_velocity_error;
-  ros::Publisher publisher_encoder_angle_1;
-  ros::Publisher publisher_encoder_angle_2;
-  ros::Publisher publisher_Difference_load_drone_position;
-  ros::Publisher publisher_rel_load_pose_position;
+ 
 
-  ros::Subscriber load_state_sub;
-  ros::Subscriber data_payload_sub;
+ 
+
+
+
 
   geometry_msgs::Pose anchoring_pt_pose_;
   geometry_msgs::Twist anchoring_pt_velocity_;
@@ -359,35 +369,43 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     ROS_INFO("[Se3CopyController]: correctly loaded all Se3CopyController parameters!");
   }
 
-
   // | ------------------- create publishers ------------------- |
-   // TODO bryan: change below to correct msg types (e.g., do not use PoseArray for a thrust or angle)
+  // TODO bryan: change below to correct msg types (e.g., do not use PoseArray for a thrust or angle)
   // UAV:
-  custom_publisher_projected_thrust_ = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
-  custom_publisher_thrust_           = nh_.advertise<std_msgs::Float64>("custom_thrust",1);
-  pub_thrust_satlimit_physical_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit_physical",1);
-  pub_thrust_satlimit_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit",1);
-  pub_thrust_satval_           = nh_.advertise<std_msgs::Float64>("thrust_satval",1);
-  pub_hover_thrust_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
-  pub_tilt_angle_            = nh_.advertise<std_msgs::Float64>("tilt_angle",1);
+  projected_thrust_publisher_ = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
+  thrust_publisher_           = nh_.advertise<std_msgs::Float64>("custom_thrust",1);
+  thrust_satlimit_physical_publisher_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit_physical",1);
+  thrust_satlimit_publisher_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit",1);
+  thrust_satval_publisher_           = nh_.advertise<std_msgs::Float64>("thrust_satval",1);
+  hover_thrust_publisher_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
+  tilt_angle_publisher_            = nh_.advertise<std_msgs::Float64>("tilt_angle",1);
+  uav_state_publisher_   = nh_.advertise<mrs_msgs::UavState>("uav_state",1); // TODO: seems not LOAD specific, why are both tracker and controller publishig on this topic???
+  // LOAD (1 & 2 UAVs):
+  // Depending on _run_type_ we publish to different topics
 
-  // LOAD:
-  if (_run_type_ == "simulation") //When in simulation, anchoringpoint/load information is not published on the same topic
-  {
-    custom_publisher_load_pose   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
-    custom_publisher_load_vel   = nh_.advertise<geometry_msgs::Twist>("load_vel",1);
-    custom_publisher_uav_state   = nh_.advertise<mrs_msgs::UavState>("uav_state",1);
-    publisher_load_position_errors = nh_.advertise<geometry_msgs::Pose>("load_position_errors",1); //Might be useless if we do this computation in matlab as in the RAL plots.
-  }else{
-    //publisher for encoders when doing real experiment
-    custom_publisher_load_pose_experiments   = nh_.advertise<geometry_msgs::Vector3>("load_pose_position",1);
-    custom_publisher_load_pose_error = nh_.advertise<geometry_msgs::Vector3>("load_pose_error",1);
-    custom_publisher_load_velocity_error = nh_.advertise<geometry_msgs::Vector3>("load_velocity_error",1);
-    publisher_encoder_angle_1 = nh_.advertise<std_msgs::Float64>("encoder_angle_1",1);
-    publisher_encoder_angle_2 = nh_.advertise<std_msgs::Float64>("encoder_angle_2",1);
-    publisher_Difference_load_drone_position = nh_.advertise<geometry_msgs::Vector3>("Difference_load_drone_position",1);
-    publisher_rel_load_pose_position = nh_.advertise<geometry_msgs::Vector3>("rel_load_pose_position",1);
+  // TODO: feels sloppy to use different topic names for same physical variable. The actual topics you publish info to (e.g. for graphs or other nodes) should be the same and independent of the load. There should be at least some topics and publishers used for both runtypes and only those specific like encoder angles you have only for specific run_type.
+  // TODO: links between publisher and topic names very unclear
+  // MAke sure that if you publish to a topic here, the tracker is not doing the same.
+  if (_run_type_ == "simulation") //publishers for anchoring point/load information when running simulations
+  { 
+    load_pose_publisher_   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
+    load_vel_publisher_   = nh_.advertise<geometry_msgs::Twist>("load_vel",1);
+    load_position_errors_publisher_ = nh_.advertise<geometry_msgs::Pose>("load_position_errors",1); //TODO Might be useless if we do this computation in matlab as in the RAL plots.
+  }// TODO: case below has no use, why are you making cases?
+  else if ((_run_type_ == "uav")){ // publishers for encoders when running hardware experiments
+    // load_pose_experiments_publisher_   = nh_.advertise<geometry_msgs::Vector3>("load_pose_position",1); // TODO: unused...?
+    // load_pose_error_publisher_ = nh_.advertise<geometry_msgs::Vector3>("load_pose_error",1); // TODO: unused...?
+    // load_velocity_error_publisher_ = nh_.advertise<geometry_msgs::Vector3>("load_velocity_error",1); // TODO: unused..?
+    // TODO It would be good to have a topic of this so we can always log the raw encoder data.
+    // encoder_angle_1_publisher_ = nh_.advertise<std_msgs::Float64>("encoder_angle_1",1); // TODO: unclear what angle 1 and 2 is
+    // encoder_angle_2_publisher_ = nh_.advertise<std_msgs::Float64>("encoder_angle_2",1);
+  } 
+  else {
+    ROS_ERROR("[Se3CopyController]: _run_type_ undefined!");
+    ros::requestShutdown();
   }
+
+  // TODO Put here the subscribers!!
   // | --------------------------------- |
 
   // | ---------------- prepare stuff from params --------------- |
@@ -398,7 +416,6 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   Ib_b_                = Eigen::Vector2d::Zero(2); //Body integral, see ctu-mrs paper for more details.
 
   // | --------------- dynamic reconfigure server --------------- |
-
   drs_params_.kpxy             = kpxy_;
   drs_params_.kvxy             = kvxy_;
   drs_params_.kaxy             = kaxy_;
@@ -415,19 +432,15 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   drs_params_.km_lim           = km_lim_;
   drs_params_.output_mode      = output_mode_;
   drs_params_.jerk_feedforward = true;
-
   drs_.reset(new Drs_t(mutex_drs_, nh_));
   drs_->updateConfig(drs_params_);
   Drs_t::CallbackType f = boost::bind(&Se3CopyController::callbackDrs, this, _1, _2);
   drs_->setCallback(f);
   // | ------------------------ profiler ------------------------ |
-
   profiler_ = mrs_lib::Profiler(nh_, "Se3CopyController", _profiler_enabled_);
 
   // | ----------------------- finish init ---------------------- |
-
   ROS_INFO("[Se3CopyController]: initialized, version %s", VERSION);
-
   is_initialized_ = true;
 }
 
@@ -568,10 +581,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   }
 
   // | -----------------LOAD---------------- |
-  custom_publisher_uav_state.publish(uav_state_); 
+  uav_state_publisher_.publish(uav_state_); 
 
   std::string slash = "/";
-
+  // TODO: subscribers should not be in an update function but in the init!
   if (_run_type_ == "simulation") //Depending on the runtype, subscribe to the correct topic to receive the state of the payload/anchoring point.
   {
     // subscriber of the simulation
@@ -754,10 +767,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     // load_velocity_error.y = -Evl[1];
     // load_velocity_error.z = -Evl[2];
 
-    // custom_publisher_load_pose_experiments.publish(load_pose_position);
+    // load_pose_experiments_publisher_.publish(load_pose_position);
     
-    // custom_publisher_load_pose_error.publish(load_pose_error);
-    // custom_publisher_load_velocity_error.publish(load_velocity_error);
+    // load_pose_error_publisher_.publish(load_pose_error);
+    // load_velocity_error_publisher_.publish(load_velocity_error);
 
     // // ROS_INFO_STREAM("Se3BruboticsLoadController: Load_pose_position = \n" << load_pose_position);
     // // ROS_INFO_STREAM("Se3BruboticsLoadController: Epl (Rpl-load_pose)= \n" << Epl);
@@ -973,10 +986,10 @@ load_position_errors.position.y=Epl[1];
 load_position_errors.position.z=Epl[2];
 
   try {
-    publisher_load_position_errors.publish(load_position_errors);
+    load_position_errors_publisher_.publish(load_position_errors);
   }
   catch (...) {
-    ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", publisher_load_position_errors.getTopic().c_str());
+    ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", load_position_errors_publisher_.getTopic().c_str());
   }
 // 
 
@@ -1062,7 +1075,7 @@ load_position_errors.position.z=Epl[2];
   f_norm[2] = cos(theta.data);
 
   // publish the tilt angle
-  pub_tilt_angle_.publish(theta);
+  tilt_angle_publisher_.publish(theta);
 
   // | ------------- construct the (desired) rotational matrix ------------ |
 
@@ -1168,10 +1181,10 @@ load_position_errors.position.z=Epl[2];
   double thrust       = 0;
 
   // custom publisher
-  custom_publisher_projected_thrust_.publish(thrust_force);
+  projected_thrust_publisher_.publish(thrust_force);
   std_msgs::Float64 thrust_norm;
   thrust_norm.data = sqrt(f(0,0)*f(0,0)+f(1,0)*f(1,0)+f(2,0)*f(2,0)); // norm of f ( not projected on the z axis of the UAV frame)
-  custom_publisher_thrust_.publish(thrust_norm);
+  thrust_publisher_.publish(thrust_norm);
   // print _motor_params_.A and _motor_params_.B
   // ROS_INFO_STREAM("_motor_params_.A = \n" << _motor_params_.A);
   // ROS_INFO_STREAM("_motor_params_.B = \n" << _motor_params_.B);
@@ -1187,9 +1200,9 @@ load_position_errors.position.z=Epl[2];
   // hover_thrust.data = _uav_mass_*common_handlers_->g; 
   hover_thrust.data = total_mass*common_handlers_->g;
   // publish these so you have them in matlab
-  pub_thrust_satlimit_physical_.publish(thrust_saturation_physical);
-  pub_thrust_satlimit_.publish(_thrust_saturation_);
-  pub_hover_thrust_.publish(hover_thrust);
+  thrust_satlimit_physical_publisher_.publish(thrust_saturation_physical);
+  thrust_satlimit_publisher_.publish(_thrust_saturation_);
+  hover_thrust_publisher_.publish(hover_thrust);
 
   if (!control_reference->use_thrust) {
     if (thrust_force.data >= 0) {
@@ -1253,7 +1266,7 @@ load_position_errors.position.z=Epl[2];
   std_msgs::Float64 thrust_physical_saturated;
   thrust_physical_saturated.data = mrs_lib::quadratic_thrust_model::thrustToForce(common_handlers_->motor_params, thrust);
   //ROS_INFO_STREAM("thrust_physical_saturated = \n" << thrust_physical_saturated);
-  pub_thrust_satval_.publish(thrust_physical_saturated);
+  thrust_satval_publisher_.publish(thrust_physical_saturated);
 
   // prepare the attitude feedback
   Eigen::Vector3d q_feedback = -Kq * Eq.array();
@@ -1799,16 +1812,16 @@ void Se3CopyController::loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr
     ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: publish this here or you get strange error");
 
     try {
-      custom_publisher_load_pose.publish(anchoring_pt_pose_);
+      load_pose_publisher_.publish(anchoring_pt_pose_);
     }
     catch (...) {
-      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", custom_publisher_load_pose.getTopic().c_str());
+      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", load_pose_publisher_.getTopic().c_str());
     }
     try {
-      custom_publisher_load_vel.publish(anchoring_pt_velocity_);
+      load_vel_publisher_.publish(anchoring_pt_velocity_);
     }
     catch (...) {
-      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", custom_publisher_load_vel.getTopic().c_str());
+      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", load_vel_publisher_.getTopic().c_str());
     }
 // 
 
@@ -1874,8 +1887,8 @@ void Se3CopyController::loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr
   // load_lin_vel[0]= load_velocity.linear.x;
   // load_lin_vel[1]= load_velocity.linear.y;
   // load_lin_vel[2]= load_velocity.linear.z;
-  // custom_publisher_load_pose.publish(load_pose);
-  // custom_publisher_load_vel.publish(load_velocity);
+  // load_pose_publisher_.publish(load_pose);
+  // load_vel_publisher_.publish(load_velocity);
 }
 
 
@@ -1907,9 +1920,9 @@ void Se3CopyController::BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg) 
   }
 
 //   encoder_angle_1_to_publish.data = encoder_angle_1;
-//   publisher_encoder_angle_1.publish(encoder_angle_1_to_publish);
+//   encoder_angle_1_publisher_.publish(encoder_angle_1_to_publish);
 //   encoder_angle_2_to_publish.data = encoder_angle_2;
-//   publisher_encoder_angle_2.publish(encoder_angle_2_to_publish);
+//   encoder_angle_2_publisher_.publish(encoder_angle_2_to_publish);
 //   //ROS_INFO_STREAM("Encoder_angle_1 \n" << encoder_angle_1_to_publish );
 //   //ROS_INFO_STREAM("Encoder_angle_2 \n" << encoder_angle_2_to_publish );
   
