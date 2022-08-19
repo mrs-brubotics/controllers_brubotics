@@ -150,8 +150,12 @@ private:
   // ---------------
   // ROS Subscribers:
   // ---------------
-  ros::Subscriber load_state_sub;
-  ros::Subscriber data_payload_sub;
+  // TODO: subscriber names not well chosen
+  ros::Subscriber load_state_sub_;
+  void GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg); // TODO: bryan think how we can make library to use these function in both controller and tracker if exactly same
+  ros::Subscriber data_payload_sub_; 
+  void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg); // TODO: bryan think how we can make library to use these function in both controller and tracker if exactly same
+  
 
 
 
@@ -271,9 +275,7 @@ private:
   Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
   Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
 
-  // TODO: bryan think how we can make library to use these function in both controller and tracker if exactly same
-  void loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg);
-  void BacaCallback(const mrs_msgs::BacaProtocolConstPtr& msg);
+
 
 };
 
@@ -382,32 +384,44 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   uav_state_publisher_   = nh_.advertise<mrs_msgs::UavState>("uav_state",1); // TODO: seems not LOAD specific, why are both tracker and controller publishig on this topic???
   // LOAD (1 & 2 UAVs):
   // Depending on _run_type_ we publish to different topics
-
   // TODO: feels sloppy to use different topic names for same physical variable. The actual topics you publish info to (e.g. for graphs or other nodes) should be the same and independent of the load. There should be at least some topics and publishers used for both runtypes and only those specific like encoder angles you have only for specific run_type.
   // TODO: links between publisher and topic names very unclear
-  // MAke sure that if you publish to a topic here, the tracker is not doing the same.
-  if (_run_type_ == "simulation") //publishers for anchoring point/load information when running simulations
-  { 
+  // Make sure that if you publish to a topic here, the tracker is not doing the same.
+  // if (_run_type_ == "simulation") //publishers for anchoring point/load information when running simulations
+  // { 
     load_pose_publisher_   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
     load_vel_publisher_   = nh_.advertise<geometry_msgs::Twist>("load_vel",1);
     load_position_errors_publisher_ = nh_.advertise<geometry_msgs::Pose>("load_position_errors",1); //TODO Might be useless if we do this computation in matlab as in the RAL plots.
-  }// TODO: case below has no use, why are you making cases?
-  else if ((_run_type_ == "uav")){ // publishers for encoders when running hardware experiments
+  // }// TODO: case below has no use, why are you making cases?
+  // else if ((_run_type_ == "uav")){ // publishers for encoders when running hardware experiments
     // load_pose_experiments_publisher_   = nh_.advertise<geometry_msgs::Vector3>("load_pose_position",1); // TODO: unused...?
     // load_pose_error_publisher_ = nh_.advertise<geometry_msgs::Vector3>("load_pose_error",1); // TODO: unused...?
     // load_velocity_error_publisher_ = nh_.advertise<geometry_msgs::Vector3>("load_velocity_error",1); // TODO: unused..?
     // TODO It would be good to have a topic of this so we can always log the raw encoder data.
     // encoder_angle_1_publisher_ = nh_.advertise<std_msgs::Float64>("encoder_angle_1",1); // TODO: unclear what angle 1 and 2 is
     // encoder_angle_2_publisher_ = nh_.advertise<std_msgs::Float64>("encoder_angle_2",1);
-  } 
-  else {
-    ROS_ERROR("[Se3CopyController]: _run_type_ undefined!");
+  // } 
+  // else {
+  //   ROS_ERROR("[Se3CopyController]: _run_type_ undefined!");
+  //   ros::requestShutdown();
+  // }
+
+  ROS_INFO("[DergbryanTracker]: advertised all publishers.");
+  // | ------------------- create subscribers ------------------- |
+  // this uav subscribes to own (i.e., of this uav) load states:
+  // TODO: this block was initially placed in update function above "get the current heading". Replacing it here, it works in sim, but to be tested on hardware. 
+  if (_run_type_ == "simulation"){ // subscriber of the gazebo simulation
+    load_state_sub_ =  nh_.subscribe("/gazebo/link_states", 1, &Se3CopyController::GazeboLoadStatesCallback, this, ros::TransportHints().tcpNoDelay());
+  }
+  else if (_run_type_ == "uav"){ // subscriber of the hardware encoders
+    std::string slash = "/";
+    data_payload_sub_ = nh_.subscribe(slash.append(_uav_name_.append("/serial/received_message")), 1, &Se3CopyController::BacaCallback, this, ros::TransportHints().tcpNoDelay()); // TODO: explain how this is used for 2 uav hardware
+  }
+  else{ // undefined
+    ROS_ERROR("[Se3CopyController]: undefined _run_type_ used!");
     ros::requestShutdown();
   }
-
-  // TODO Put here the subscribers!!
-  // | --------------------------------- |
-
+  ROS_INFO("[Se3CopyController]: linked all subscribers to their callbacks.");
   // | ---------------- prepare stuff from params --------------- |
 
   // initialize the integrals
@@ -583,17 +597,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // | -----------------LOAD---------------- |
   uav_state_publisher_.publish(uav_state_); 
 
-  std::string slash = "/";
-  // TODO: subscribers should not be in an update function but in the init!
-  if (_run_type_ == "simulation") //Depending on the runtype, subscribe to the correct topic to receive the state of the payload/anchoring point.
-  {
-    // subscriber of the simulation
-    load_state_sub =  nh_.subscribe("/gazebo/link_states", 1, &Se3CopyController::loadStatesCallback, this, ros::TransportHints().tcpNoDelay());
-  }else{
-    // subscriber of the encoder
-    data_payload_sub = nh_.subscribe("/nuc4/serial/received_message", 1, &Se3CopyController::BacaCallback, this, ros::TransportHints().tcpNoDelay());
-    //slash.append(_uav_name_.append("/serial/received_message"))
-  }
+  
 
   // | ----------------- get the current heading ---------------- |
   uav_heading = 0;
@@ -1768,17 +1772,15 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3CopyController::setC
 // | ----------------- LOAD ----------------------------------------- | 
 // | ----------------- load subscribtion callback --------------|
 
-void Se3CopyController::loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg) {
-    //This callback function is only triggered when doing simulation, and will be used to unpack the data coming from the Gazebo topics.
-    // Everything is called
-    int anchoring_pt_index; //Will be used to store the index at which the payload appears in the message that is received from Gazebo. 
+void Se3CopyController::GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg) {
+    // This callback function is only triggered when doing simulation, and will be used to unpack the data coming from the Gazebo topics to determine the load state (i.e., in terms of anchoring point position and velocity).
+    int anchoring_pt_index; // Stores the index at which the anchoring point appears in the message that is received from Gazebo. 
     std::vector<std::string> link_names = loadmsg->name; // Take a vector containing the name of each link in the simulation. Among these there is the links that are related to the payload. 
     for(size_t i = 0; i < link_names.size(); i++){ // Go through all the link names
-
       if (_type_of_system_ == "1uav_payload"){
-        if(link_names[i] == "bar::link_01"){ //link_01 is the point mass payload link. When the link_name correspond to the one of the payload, defined in the URDF/xacro files of the testing folder.
-          anchoring_pt_index = i; //Store the index of the name, as it will be used as the index to access all the states of this link, in the loadmsg later.
-          payload_spawned_ = true; //Notify that the payload has spawned. This will only be triggered once, and allow predictions to start.
+        if(link_names[i] == "bar::link_01"){ //link_01 is the point mass payload link. When the link_name corresponds to the one of the payload, defined in the URDF/xacro files of the testing folder.
+          anchoring_pt_index = i; // Store the index of the name, as it will be used as the index to access all the states of this link, in the loadmsg later.
+          payload_spawned_ = true; // Notify that the payload has spawned. This will only be triggered once, and allow predictions to start.
         }
       }
       if (_type_of_system_ == "2uavs_payload"){ // 2UAV transporting beam payload case. Need to return different link if this UAV is the uav1 or 2. 
@@ -1807,7 +1809,6 @@ void Se3CopyController::loadStatesCallback(const gazebo_msgs::LinkStatesConstPtr
     anchoring_pt_lin_vel_[0]= anchoring_pt_velocity_.linear.x;
     anchoring_pt_lin_vel_[1]= anchoring_pt_velocity_.linear.y;
     anchoring_pt_lin_vel_[2]= anchoring_pt_velocity_.linear.z;
-
 
     ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: publish this here or you get strange error");
 
