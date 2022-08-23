@@ -68,7 +68,7 @@ private:
   std::string _run_type_;       // set to "simulation" (for Gazebo simulation) OR "uav" (for hardware testing) defined in bashrc or session.yaml. Used for payload transport as payload position comes from two different callbacks depending on how the test is ran (in sim or on real UAV).
   std::string _type_of_system_; // defines the dynamic system model to simulate in the prediction using the related controller: can be 1uav_no_payload, 1uav_payload or 2uavs_payload. Set in session.yaml file.
   double _cable_length_;        // length of the cable between payload COM / anchoring point and COM of the UAV
-  double _load_mass_;           // feedforward load mass defined in the session.yaml of every test file (session variable also used by the xacro for Gazebo simulation)
+  double _load_mass_;           // feedforward load mass per uav defined in the session.yaml of every test file (session variable also used by the xacro for Gazebo simulation)
   
   // | ------------------- declaring .yaml parameters (and some related vars & funs) ------------------- |
   // Se3CopyController:
@@ -303,7 +303,12 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   _type_of_system_ = getenv("TYPE_OF_SYSTEM"); 
   if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){ // load the required load transportation paramters only if the test is configured for it
     _cable_length_      = std::stod(getenv("CABLE_LENGTH")); 
-    _load_mass_         = std::stod(getenv("LOAD_MASS")); 
+    if (_type_of_system_=="1uav_payload"){
+      _load_mass_         = std::stod(getenv("LOAD_MASS")); // LOAD_MASS is the total load mass of the to be transported object
+    }
+    else if (_type_of_system_=="2uavs_payload"){ 
+      _load_mass_ = 0.50 * std::stod(getenv("LOAD_MASS")); // in case of 2uavs, each uav takes only half of the total load
+    }
   }
   ROS_INFO("[Se3CopyController]: finished loading environment (session/bashrc) parameters");
 
