@@ -245,7 +245,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   ROS_INFO("[Se3CopyController]: start of initialize");
   _uav_mass_ = uav_mass;
   common_handlers_ = common_handlers;
-  ros::NodeHandle nh_(parent_nh, name_space);
+  ros::NodeHandle nh_(parent_nh, name_space); // NodeHandle for Se3CopyController, used to load controller params
   ros::Time::waitForValid();
   
   // | ------------------- loading env (session/bashrc) parameters ------------------- |
@@ -261,6 +261,15 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     }
     else if (_type_of_system_=="2uavs_payload"){ 
       _load_mass_ = 0.50 * std::stod(getenv("LOAD_MASS")); // in case of 2uavs, each uav takes only half of the total bar-type load
+    }
+    // Sanity checks:
+    if(_cable_length_ <=0){
+      ROS_ERROR("[Se3CopyController]: _cable_length_ <=0, use a value > 0!");
+      ros::requestShutdown();
+    }
+    if(_load_mass_<=0){
+      ROS_ERROR("[Se3CopyController]: _load_mass_ <=0, use a value > 0!");
+      ros::requestShutdown();
     }
   }
   ROS_INFO("[Se3CopyController]: finished loading environment (session/bashrc) parameters");
@@ -331,7 +340,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   // | ------------------- create publishers ------------------- |
   // TODO bryan: change below to correct msg types (e.g., do not use PoseArray for a thrust or angle)
   // UAV:
-  uav_state_publisher_   = nh_.advertise<mrs_msgs::UavState>("uav_state",1); // TODO: seems not LOAD specific, why are both tracker and controller publishig on this topic???
+  uav_state_publisher_   = nh_.advertise<mrs_msgs::UavState>("uav_state",1); // TODO: seems not LOAD specific, why are both tracker and controller publishig on this topic??? Bryan: not issue as will be publish on different topic due to name of controller/tracker before topic name. So can be used to check if the same
   projected_thrust_publisher_ = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
   thrust_publisher_           = nh_.advertise<std_msgs::Float64>("custom_thrust",1);
   thrust_satlimit_physical_publisher_           = nh_.advertise<std_msgs::Float64>("thrust_satlimit_physical",1);
@@ -501,7 +510,7 @@ void Se3CopyController::deactivate(void) {
 
 const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_msgs::UavState::ConstPtr&        uav_state,
                                                                 const mrs_msgs::PositionCommand::ConstPtr& control_reference) {
-
+  
   mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3CopyController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
@@ -518,6 +527,27 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", uav_state_publisher_.getTopic().c_str());
   }
 
+  // Op - position in global frame
+  // Ov - velocity in global frame
+  Eigen::Vector3d Op(uav_state->pose.position.x, uav_state->pose.position.y, uav_state->pose.position.z);
+  Eigen::Vector3d Ov(uav_state->velocity.linear.x, uav_state->velocity.linear.y, uav_state->velocity.linear.z);
+
+  // R - current uav attitude
+  Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
+
+  // Ow - UAV angular rate
+  Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z); // TODO: actually not used (see Se3Controller CTU)
+
+  // payload anchoring point state:
+
+  // Opl - position load in global frame
+  // Ovl - velocity load in global frame
+  
+  // TODO: currently Opl and Ovl are only known once the payload has been spawned, otherwise inititlized on zero.
+  Eigen::Vector3d Opl = anchoring_pt_pose_position_;
+  Eigen::Vector3d Ovl = anchoring_pt_lin_vel_;
+
+  // DRS:
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
 
   if (!is_active_) {
@@ -617,18 +647,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   } else {
     Ra << 0, 0, 0;
   }
-
-  // Op - position in global frame
-  // Ov - velocity in global frame
-  Eigen::Vector3d Op(uav_state->pose.position.x, uav_state->pose.position.y, uav_state->pose.position.z);
-  Eigen::Vector3d Ov(uav_state->velocity.linear.x, uav_state->velocity.linear.y, uav_state->velocity.linear.z);
-
-  // R - current uav attitude
-  Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
-
-  // Ow - UAV angular rate
-  Eigen::Vector3d Ow(uav_state->velocity.angular.x, uav_state->velocity.angular.y, uav_state->velocity.angular.z);
-
+  /* test streaming the references Rp, Rv, Ra when the uav is moving.*/
+  // ROS_INFO_STREAM("Rp = \n" << Rp);
+  // ROS_INFO_STREAM("Rv = \n" << Rv);
+  // ROS_INFO_STREAM("Ra = \n" << Ra);
+ 
   // | -------------- calculate the control errors -------------- |
   // position control error
   Eigen::Vector3d Ep = Eigen::Vector3d::Zero(3);
@@ -644,21 +667,18 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
     Ev = Ov - Rv;
   }
+  /*VALIDATE: test streaming the errors.*/
+  // ROS_INFO_STREAM("Ep = \n" << Ep);
+  // ROS_INFO_STREAM("Ev = \n" << Ev);
 
   // | --------------------------LOAD--------------------------|
   // --------------------------------------------------------------
-  // |          load the control reference and estimates          |
+  // |          load the control reference and errors             |
   // --------------------------------------------------------------
-
+  // TODO: Rpl and Rvl not defined, nor used. Should be the uav ref cable length down. Not used in actual error of Pandolfo.
   // Rpl - position reference load in global frame
   // Rvl - velocity reference load in global frame
 
-  // Opl - position load in global frame
-  // Ovl - velocity load in global frame
-  
-  // TODO: currently Opl and Ovl are only known once the payload has been spawned
-  Eigen::Vector3d Opl(anchoring_pt_pose_position_[0], anchoring_pt_pose_position_[1], anchoring_pt_pose_position_[2]);
-  Eigen::Vector3d Ovl(anchoring_pt_lin_vel_[0], anchoring_pt_lin_vel_[1], anchoring_pt_lin_vel_[2]);
   Eigen::Vector3d Epl = Eigen::Vector3d::Zero(3); // load position control error
   Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3); // load velocity control error
 
@@ -670,11 +690,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       // 2021 student said this : Op - Opl is super unstable!! However, this is the way Pandolfo thesis explained it. And I think what they did (Rp - Opl) will always be more unstable, as for a very far references, the control actions of the error of the UAV and the one of the Payload will superpose and generate a huge Td, which can easilly saturates the actuators and creates instability. 
       // TODO: I thought Raphael only looks to the posiiton error in xy (ignoring z)? check this.
     }
-
     // load velocity control error
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
-      Evl = Ov - Ovl; //relative to world frame
+      Evl = Ov - Ovl; // speed relative to base frame
     }
     // TODO: check and delete implementation Raphael:
     //if (_run_type_ == "simulation"){
@@ -695,7 +714,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     //   control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
     //   Evl = Ov - Ovl; //(speed relative to world frame)
     // }
-  }else if(_run_type_ == "uav" && payload_spawned_){
+  } 
+  else if(_run_type_ == "uav" && payload_spawned_){
     //TODO implement FK from encoder angles to absolute position of the anchoring point.
     // if(counter_angle < 500){
     //   counter_angle = counter_angle +1;
@@ -866,33 +886,30 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     // ROS_INFO_STREAM("Kdl" <<  Kdl);
   } 
   
-  // | ------------------------compute total_mass and scale gains --------------------------------------|
+  // | ------------------------compute total_mass --------------------------------------|
   //ROS_INFO_STREAM("_uav_mass_ \n" << _uav_mass_ ); // _uav_mass_ is loaded in initialize function
 
   //Compute the total mass of the system (depending on if there is a payload being transported or not). Note that in the 2UAV case, _load_mass_ is half of the mass of the beam payload. Which means it is the feedforward mass each UAV will have to lift additionally. 
-  double total_mass = 0.0;
+  double total_mass;
   if(_type_of_system_ == "1uav_payload" || _type_of_system_ == "2uavs_payload" ){
-    if (_run_type_ == "simulation"){ 
-      if(payload_spawned_){
-        total_mass = _uav_mass_ + _load_mass_ + uav_mass_difference_ ;
-        //ROS_INFO_STREAM("payload spwaned" << std::endl << total_mass);
-      }else{
-        total_mass = _uav_mass_ + uav_mass_difference_ ;
-        //ROS_INFO_STREAM("payload NOT spwaned" << std::endl << total_mass);
-      }
+    if(payload_spawned_){ // for simulation, but also on the hardware, when the controller activates, the load mass is always already suspended by the uav
+      total_mass = _uav_mass_ + _load_mass_ + uav_mass_difference_ ;
+      //ROS_INFO_STREAM("payload spwaned" << std::endl << total_mass);
+    }else{
+      total_mass = _uav_mass_ + uav_mass_difference_ ;
+      //ROS_INFO_STREAM("payload NOT spwaned" << std::endl << total_mass);
     }
-    else if(_run_type_ == "uav"){ // on the hardware, when the controller activates, the load mass is always already suspended by the uav
-      total_mass = _uav_mass_ + _load_mass_ + uav_mass_difference_ ;  // TODO: Raphael:Need to solve that for hardware test as no load_mass. Bryan: i don't see the issue, there is a load_mass exported.
-    }
-  }else{
+  }else{ // no load case
     total_mass = _uav_mass_ + uav_mass_difference_;
   }
-  // Scale the gains with the total mass of the system.
+
+  // Scale the gains with the total estimated mass of the system
   Kp = Kp * total_mass;
   Kv = Kv * total_mass;
   Kpl = Kpl * total_mass;
   Kdl = Kdl * total_mass;
 
+  // gains after being mutiplied with total_mass
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_x*m = %f", Kp(0));
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_y*m = %f", Kp(1));
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_z*m = %f", Kp(2));
@@ -905,14 +922,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_y*m = %f", Kdl(1));
 
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: _uav_mass_ = %f", _uav_mass_);
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: total_mass = %f", total_mass);
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: uav_mass_difference_ (estimated)= %f", uav_mass_difference_);
+  if(_type_of_system_ == "1uav_payload" || _type_of_system_ == "2uavs_payload" ){
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: _load_mass_ = %f", _load_mass_);
+  }
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: total_mass (estimated)= %f", total_mass);
+  
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: n_motors = %d", common_handlers_->motor_params.n_motors);
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: motor_params.A = %f", common_handlers_->motor_params.A);
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: motor_params.B = %f", common_handlers_->motor_params.B);
-
-  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.n_motors = \n" << common_handlers_->motor_params.n_motors);
-  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.A = \n" << common_handlers_->motor_params.A);
-  // ROS_INFO_STREAM("[Se3CopyController]: common_handlers_->motor_params.B = \n" << common_handlers_->motor_params.B);
 
   // | --------------- desired orientation matrix --------------- |
   // get body integral in the world frame
@@ -977,9 +995,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   Eigen::Vector3d f_norm = f.normalized();
 
   // calculate the force in spherical coordinates
+  // TODO: streamline theta using simple double and Float64 if needed. See ComputeSe3Controller.
   std_msgs::Float64 theta;
   theta.data = acos(f_norm[2]);
   double phi   = atan2(f_norm[1], f_norm[0]);
+
+  // ROS_INFO_STREAM("theta (deg) = \n" << theta*180/3.1415);
+  // ROS_INFO_STREAM("phi (deg) = \n" << phi*180/3.1415);
 
   // check for the failsafe limit
   if (!std::isfinite(theta.data)) {
@@ -996,7 +1018,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     ROS_INFO("[Se3CopyController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
     ROS_INFO("[Se3CopyController]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
     ROS_INFO("[Se3CopyController]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
-     ROS_INFO("[Se3CopyController]: load position feedback: [%.2f, %.2f, %.2f]", load_position_feedback[0], load_position_feedback[1], load_position_feedback[2]);
+    ROS_INFO("[Se3CopyController]: load position feedback: [%.2f, %.2f, %.2f]", load_position_feedback[0], load_position_feedback[1], load_position_feedback[2]);
     ROS_INFO("[Se3CopyController]: load velocity feedback: [%.2f, %.2f, %.2f]", load_velocity_feedback[0], load_velocity_feedback[1], load_velocity_feedback[2]);
     ROS_INFO("[Se3CopyController]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
     ROS_INFO("[Se3CopyController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", control_reference->position.x, control_reference->position.y,
@@ -1434,7 +1456,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // --------------------------------------------------------------
 
   mrs_msgs::AttitudeCommand::Ptr output_command(new mrs_msgs::AttitudeCommand);
-  output_command->header.stamp = ros::Time::now();
+  output_command->header.stamp = ros::Time::now(); // TODO: why ros::Time::now used and not synced with controller update?
 
   // | ------------ compensated desired acceleration ------------ |
 
@@ -1738,6 +1760,7 @@ void Se3CopyController::GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesCo
 // TODO: document and test if this works on hardware
 // TODO: combine with BacaLoadStatesCallback of controller as (almost) same code
 void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConstPtr& msg) {
+  // TODO: similar to GazeboLoadStatesCallback, update the variable payload_spawned_ if this the data is correctly received from arduino
   int message_id;
   int payload_1;
   int payload_2;
