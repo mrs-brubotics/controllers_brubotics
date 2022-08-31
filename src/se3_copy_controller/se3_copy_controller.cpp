@@ -139,34 +139,35 @@ private:
   ros::Publisher hover_thrust_publisher_;
   ros::Publisher tilt_angle_publisher_;
   //|-----------------------------LOAD--------------------------------|//
-  ros::Publisher load_pose_publisher_;
-  geometry_msgs::Pose anchoring_pt_pose_;
-  Eigen::Vector3d anchoring_pt_pose_position_ ;
-  ros::Publisher load_vel_publisher_;
-  geometry_msgs::Twist anchoring_pt_velocity_;
-  Eigen::Vector3d anchoring_pt_lin_vel_;
-  ros::Publisher load_position_errors_publisher_;
-  // TODO: do we need these?
+  ros::Publisher load_pose_publisher_; //Publisher used to publish the absolute position of payload, for both simulation and hardware
+  geometry_msgs::Pose anchoring_pt_pose_; //msg to be published as the position of the payload.
+  Eigen::Vector3d anchoring_pt_pose_position_ ; //Vector of the absolute position of the payload.
+
+  ros::Publisher load_vel_publisher_; //Publisher that publish the absolute velocity of the payload, both for simulation and hardware.
+  geometry_msgs::Twist anchoring_pt_velocity_; //Msg used to be published as the velocity of payload
+  Eigen::Vector3d anchoring_pt_lin_vel_; //Vector of the absolute velocity of the payload.
+
+  ros::Publisher load_position_errors_publisher_; // Publisher that will publish the error on the payload (Epl). 
+  // TODO: do we need these? Don't think so, but check later when doing testing.
   // ros::Publisher load_pose_experiments_publisher_;
   // ros::Publisher load_pose_error_publisher_;
   // ros::Publisher load_velocity_error_publisher_;
-  ros::Publisher encoder_angle_1_publisher_;
+  ros::Publisher encoder_angle_1_publisher_; //Publishers used to publish the angles received from the bacaprotocol/Arduino.
   ros::Publisher encoder_angle_2_publisher_;
-  Eigen::Vector3d anchoring_pt_pose_position_rel_ ;
-  Eigen::Vector3d anchoring_pt_lin_vel_rel_;
+
 
   // ---------------
   // ROS Subscribers:
   // ---------------
   // TODO: 
-  ros::Subscriber load_state_sub_;
+  ros::Subscriber load_state_sub_; //Subscriber used to find the state of the payload, from Gazebo (during simulations only).
   void GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg); // TODO: bryan think how we can make library to use these function in both controller and tracker if exactly same
   bool payload_spawned_ = false; // inititally not spawned
-  ros::Subscriber data_payload_sub_; 
+  ros::Subscriber data_payload_sub_;  //Subscriber used to get the state of the payload, from Arduino data/baca protocol. (during hardware testing only)
   void BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConstPtr& msg); // TODO: bryan think how we can make library to use these function in both controller and tracker if exactly same
-  float encoder_angle_1_;
+  float encoder_angle_1_; //Angles returned by Arduino/Encoders via Bacaprotocol
   float encoder_angle_2_;
-  float encoder_velocity_1_;
+  float encoder_velocity_1_;//Angular velocities returned by Arduino/Encoders via Bacaprotocol
   float encoder_velocity_2_;
 
   // | ------------------------ integrals ----------------------- |
@@ -210,19 +211,19 @@ private:
   //Eigen::Vector3d load_pose_position_offset_ = Eigen::Vector3d::Zero(3); // TODO: document
 
   //|---------------------Bacacallback and encoder offset-------------------|//
-  std_msgs::Float64 encoder_angle_1_to_publish_;
+  std_msgs::Float64 encoder_angle_1_to_publish_; //To publish the angles received from the Baca protocol. Used only for possible debugging.
   std_msgs::Float64 encoder_angle_2_to_publish_;
-  int counter_average_encoder = 0;
+  // int counter_average_encoder = 0; //counter used to compute an average during the 5 first second of an experiment, maybe unused if no drift is experienced. See thesis 2021 7.2.2 for details about this drift.
   // Eigen::Vector3d sum_anchoring_pt_pose_(0.0, 0.0, 0.0);
-  Eigen::Vector3d sum_anchoring_pt_pose_ = Eigen::Vector3d::Zero(3);
+  // Eigen::Vector3d sum_anchoring_pt_pose_ = Eigen::Vector3d::Zero(3); // Sum used to compute the average of the position of the payload, for removing offset due to the drift.
   // Eigen::Vector3d sum_uav_pose_(0.0, 0.0, 0.0);
-  Eigen::Vector3d sum_uav_pose_ = Eigen::Vector3d::Zero(3);
-  Eigen::Vector3d average_anchoring_pt_pose_;
-  Eigen::Vector3d average_uav_pose_;
-  // Eigen::Vector3d offset_anchoring_pt_(0.0, 0.0, 0.0);
-  Eigen::Vector3d offset_anchoring_pt_ = Eigen::Vector3d::Zero(3);
+  // Eigen::Vector3d sum_uav_pose_ = Eigen::Vector3d::Zero(3); // Sum used to compute the average of the position of the UAV, to remove offset due to the drift.
+  // Eigen::Vector3d average_anchoring_pt_pose_; //Averaged value of position of payload, during the first 5 seconds of experiment.
+  // Eigen::Vector3d average_uav_pose_; // Same for UAV.
+  Eigen::Vector3d offset_anchoring_pt_ = Eigen::Vector3d::Zero(3);//The payload position offset, that will be computed from the two average values above.
 
-  bool remove_offset_ = true; // Used to compute the value of offset_anchoring_pt_ only once, then use this value in the computation of the errors when using the encoder mechanism during Hardware tests.
+
+  // bool remove_offset_ = true; // Used to compute the value of offset_anchoring_pt_ only once, then use this value in the computation of the errors when using the encoder mechanism during Hardware tests.
     //std::array<uint8_t, 3> data_payload; //Unused?
 
   // geometry_msgs::Vector3 load_pose_error;
@@ -706,55 +707,37 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
       Evl = Ov - Ovl; // speed relative to base frame
     }
-    // TODO: check and delete implementation Raphael:
-    //if (_run_type_ == "simulation"){
-    // if(payload_spawned_){
-    //   if(remove_offset_){
-    //     Epl = Op-Opl ;
-    //     load_pose_position_offset_ = Epl; // TODO: why are you computing a load_pose_position_offset_? Epl = Op-Lc*e3 - Opl. This issue of not spawning perfectly under uav should be accounted for by disabling the control action for small enough position errors
-    //     remove_offset_ = false; // AnswerTODO: I agree, and it seems to work well like this. This was from last year and can now be deleted I think. For the hardware below it is however still required as apparently they had a drift issue, see explanation below.
-    //   } 
-    // }
 
-    // if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
-    //   Epl = Op - Opl - load_pose_position_offset_; // remove offset because the load does not spawn perfectly under drone
-    //   //(position relative to base frame)// 2021 student said this : Op - Opl is super unstable!! However, this is the way Pandolfo thesis explained it. And I think what they did (Rp - Opl) will always be more unstable, as for a very far references, the control actions of the error of the UAV and the one of the Payload will superpose and generate a huge Td, which can easilly saturates the actuators and creates instability. 
-    // }
-
-    // if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
-    //   control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
-    //   Evl = Ov - Ovl; //(speed relative to world frame)
-    // }
-  } 
+  }
   else if(_run_type_ == "uav" && payload_spawned_){ // 
   //TODO implement FK from encoder angles to absolute position of the anchoring point.
 
   //  Drif of the load position was experienced during thesis 2021, see section 7.2.2
   //  To solve this issue, an average of the position is taken for the 5 first second where the controller is active (i.e., after take-off fully finished)
   //  Then use this value as an offset for the rest of the experiment.
-  //  TODO : check if this drift is experienced again. If not, this offset might be irrelevant.
+  //  TODO : check if this drift is experienced again. If not, the following lines can be deleted 
 
-    if(counter_average_encoder < 500){ //between 0 and 5 sec
-      counter_average_encoder = counter_average_encoder +1;
+    // if(counter_average_encoder < 500){ //between 0 and 5 sec
+    //   counter_average_encoder = counter_average_encoder +1;
       
-      sum_anchoring_pt_pose_=sum_anchoring_pt_pose_+Opl;
-      sum_uav_pose_=sum_uav_pose_+Op;
-      //to delete once above eq are validated:
-      // sum_load_pose.x = sum_load_pose.x + load_pose_position.x;
-      // sum_drone_pose.x = sum_drone_pose.x + uav_state->pose.position.x;
-      // sum_load_pose.y  = sum_load_pose.y + load_pose_position.y;
-      // sum_drone_pose.y = sum_drone_pose.y + uav_state->pose.position.y;
+    //   sum_anchoring_pt_pose_=sum_anchoring_pt_pose_+Opl;
+    //   sum_uav_pose_=sum_uav_pose_+Op;
+    //   //to delete once above eq are validated:
+    //   // sum_load_pose.x = sum_load_pose.x + load_pose_position.x;
+    //   // sum_drone_pose.x = sum_drone_pose.x + uav_state->pose.position.x;
+    //   // sum_load_pose.y  = sum_load_pose.y + load_pose_position.y;
+    //   // sum_drone_pose.y = sum_drone_pose.y + uav_state->pose.position.y;
 
-      // load_pose_position.x = uav_state->pose.position.x;
-      // load_pose_position.y = uav_state->pose.position.y;
-      // load_pose_position.z = uav_state->pose.position.z;
-    }else if(remove_offset_) { //After 5sec.
-      average_anchoring_pt_pose_=sum_anchoring_pt_pose_/500.0; //compute average of both UAV and Anchoring point position.
-      average_uav_pose_=sum_uav_pose_/500.0;
-      offset_anchoring_pt_=average_uav_pose_ - average_anchoring_pt_pose_; //Computed in the same way as Epl. 
-      remove_offset_=false; //To only execute this block once.
+    //   // load_pose_position.x = uav_state->pose.position.x;
+    //   // load_pose_position.y = uav_state->pose.position.y;
+    //   // load_pose_position.z = uav_state->pose.position.z;
+    // }else if(remove_offset_) { //After 5sec.
+    //   average_anchoring_pt_pose_=sum_anchoring_pt_pose_/500.0; //compute average of both UAV and Anchoring point position.
+    //   average_uav_pose_=sum_uav_pose_/500.0;
+    //   offset_anchoring_pt_=average_uav_pose_ - average_anchoring_pt_pose_; //Computed in the same way as Epl. 
+    //   remove_offset_=false; //To only execute this block once.
 
-      // average_load_pose.x = sum_load_pose.x/500.0;
+    //   // average_load_pose.x = sum_load_pose.x/500.0;
       // average_drone_pose.x = sum_drone_pose.x/500.0;
       // average_load_pose.y = sum_load_pose.y/500.0;
       // average_drone_pose.y = sum_drone_pose.y/500.0;
@@ -768,15 +751,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       // load_pose_position.x = Op[0] + Difference_load_drone_position[0] - offset.x;
       // load_pose_position.y = Op[1] + Difference_load_drone_position[1] - offset.y;
       // load_pose_position.z = Op[2] + Difference_load_drone_position[2];      
-    }         
+    // }         
     
-    if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
+    if (control_reference->use_position_horizontal || control_reference->use_position_vertical) { //if offset_anchoring_pt_ is not required, the following lines are the same than the one used in simulation. And it can be put outside the if.
       Eigen::Vector3d e3(0.0, 0.0, 1.0);
-      Epl = Op - _cable_length_*e3 - Opl - offset_anchoring_pt_ ; //Substract the offset from the error.
+      Epl = Op - _cable_length_*e3 - Opl;// - offset_anchoring_pt_ ; //Substract the offset from the error.
     }
     if (control_reference->use_velocity_horizontal || control_reference->use_velocity_vertical ||
       control_reference->use_position_vertical) {  // even when use_position_vertical to provide dampening
-      Evl = Ov -Ovl; // if encoders don't move, there is no speed (speed relative to drone)
+      Evl = Ov - Ovl; 
     }
 
     if (Epl.norm()>_cable_length_*sqrt(2)){ //Sanity check : Largest possible error when cable is oriented 90degrees. If Epl is larger, there must be an error in the FK, or in the values returned by the encoders.
@@ -1837,17 +1820,20 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
     payload_spawned_=true; // Values are finite and thus can be used to compute a finite
   }
 
+  Eigen::Vector3d anchoring_pt_pose_position_rel ; // position of the payload in the body frame B
+  Eigen::Vector3d anchoring_pt_lin_vel_rel; //Velocity of the payload in the body frame B.
+
   //Compute position of the anchoring point in body base B. (i.e., relative to drone COM)
-  anchoring_pt_pose_position_rel_[0]=_cable_length_*sin(encoder_angle_1_)*cos(encoder_angle_2_);
-  anchoring_pt_pose_position_rel_[1]=_cable_length_*sin(encoder_angle_2_);
-  anchoring_pt_pose_position_rel_[2]=-_cable_length_*cos(encoder_angle_1_)*cos(encoder_angle_2_);
+  anchoring_pt_pose_position_rel[0]=_cable_length_*sin(encoder_angle_1_)*cos(encoder_angle_2_);
+  anchoring_pt_pose_position_rel[1]=_cable_length_*sin(encoder_angle_2_);
+  anchoring_pt_pose_position_rel[2]=-_cable_length_*cos(encoder_angle_1_)*cos(encoder_angle_2_);
   
   //Compute absolute position of the payload.
   Eigen::Vector3d Op(uav_state_.pose.position.x, uav_state_.pose.position.y, uav_state_.pose.position.z);
   Eigen::Vector3d Ov(uav_state_.velocity.linear.x, uav_state_.velocity.linear.y, uav_state_.velocity.linear.z);
   Eigen::Matrix3d R = mrs_lib::AttitudeConverter(uav_state_.pose.orientation);
 
-  anchoring_pt_pose_position_=Op+R*anchoring_pt_pose_position_rel_;
+  anchoring_pt_pose_position_=Op+R*anchoring_pt_pose_position_rel;
   
   //Compute absolute velocity of the anchoring point.
 
@@ -1857,14 +1843,14 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
             Ow(2) , 0.0,       -Ow(0),
             -Ow(1), Ow(0),  0.0;
   Eigen::Matrix3d Rdot = skew_Ow*R;
-  
-  anchoring_pt_lin_vel_rel_[0]=_cable_length_*(cos(encoder_angle_1_)*cos(encoder_angle_2_)*encoder_velocity_1_
+    
+  anchoring_pt_lin_vel_rel[0]=_cable_length_*(cos(encoder_angle_1_)*cos(encoder_angle_2_)*encoder_velocity_1_
     - sin(encoder_angle_1_)*sin(encoder_angle_2_)*encoder_velocity_2_);
-  anchoring_pt_lin_vel_rel_[1]=_cable_length_*cos(encoder_angle_2_)*encoder_velocity_2_;
-  anchoring_pt_lin_vel_rel_[2]=_cable_length_*(sin(encoder_angle_2_)*cos(encoder_angle_1_)*encoder_velocity_2_+
+  anchoring_pt_lin_vel_rel[1]=_cable_length_*cos(encoder_angle_2_)*encoder_velocity_2_;
+  anchoring_pt_lin_vel_rel[2]=_cable_length_*(sin(encoder_angle_2_)*cos(encoder_angle_1_)*encoder_velocity_2_+
   sin(encoder_angle_1_)*cos(encoder_angle_2_)*encoder_velocity_1_);
   
-  anchoring_pt_lin_vel_=Ov+Rdot*anchoring_pt_pose_position_+R*anchoring_pt_lin_vel_rel_;
+  anchoring_pt_lin_vel_=Ov+Rdot*anchoring_pt_pose_position_rel+R*anchoring_pt_lin_vel_rel;
 
 
   //Store values in msgs
