@@ -285,11 +285,14 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
       ROS_ERROR("[Se3CopyController]: _load_mass_ <=0, use a value > 0!");
       ros::requestShutdown();
     }
-    if (getenv("BACA_IN_SIMULATION")=="true"){// "True" or "False", then changed into a boolean. 
+    std::string BACA_IN_SIMULATION = getenv("BACA_IN_SIMULATION");
+    if (BACA_IN_SIMULATION == "true"){// "true" or "false" as string, then changed into a boolean. 
       _baca_in_Simulation_=true;
+      // ROS_INFO("[Se3CopyController]: Use Baca in simulation : true");
     }
     else{
       _baca_in_Simulation_=false;
+      // ROS_INFO("[Se3CopyController]: Use Baca in simulation : false");
     }
 
   }
@@ -702,7 +705,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   Eigen::Vector3d Epl = Eigen::Vector3d::Zero(3); // load position control error
   Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3); // load velocity control error
-
+  // ROS_INFO_STREAM("Usebaca \n" << _baca_in_Simulation_);
   if (_run_type_ == "simulation" && payload_spawned_){
     // load position control error
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
