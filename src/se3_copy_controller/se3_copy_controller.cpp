@@ -64,12 +64,13 @@ private:
   std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers_;
 
   // | ------------------- declaring env (session/bashrc) parameters ------------------- |
-  std::string _uav_name_;       // uavID
-  std::string _run_type_;       // set to "simulation" (for Gazebo simulation) OR "uav" (for hardware testing) defined in bashrc or session.yaml. Used for payload transport as payload position comes from two different callbacks depending on how the test is ran (in sim or on real UAV).
-  std::string _type_of_system_; // defines the dynamic system model to simulate in the prediction using the related controller: can be 1uav_no_payload, 1uav_payload or 2uavs_payload. Set in session.yaml file.
-  double _cable_length_;        // length of the cable between payload COM / anchoring point and COM of the UAV
-  double _load_mass_;           // feedforward load mass per uav defined in the session.yaml of every test file (session variable also used by the xacro for Gazebo simulation)
-  
+  std::string _uav_name_;         // uavID
+  std::string _run_type_;         // set to "simulation" (for Gazebo simulation) OR "uav" (for hardware testing) defined in bashrc or session.yaml. Used for payload transport as payload position comes from two different callbacks depending on how the test is ran (in sim or on real UAV).
+  std::string _type_of_system_;   // defines the dynamic system model to simulate in the prediction using the related controller: can be 1uav_no_payload, 1uav_payload or 2uavs_payload. Set in session.yaml file.
+  double _cable_length_;          // length of the cable between payload COM / anchoring point and COM of the UAV
+  double _load_mass_;             // feedforward load mass per uav defined in the session.yaml of every test file (session variable also used by the xacro for Gazebo simulation)
+  bool _baca_in_Simulation_=false;// Used to validate the encoder angles, and the FK without having to make the UAV fly. Gains related to payload must be set on 0 to perform this. Set on false by default.
+
   // | ------------------- declaring .yaml parameters (and some related vars & funs) ------------------- |
   // Se3CopyController:
   std::string _version_;
@@ -267,6 +268,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   _run_type_       = getenv("RUN_TYPE"); 
   _type_of_system_ = getenv("TYPE_OF_SYSTEM"); 
   if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){ // load the required load transportation paramters only if the test is configured for it
+    
     _cable_length_      = std::stod(getenv("CABLE_LENGTH")); 
     if (_type_of_system_=="1uav_payload"){
       _load_mass_         = std::stod(getenv("LOAD_MASS")); // LOAD_MASS is the total load mass of the to be transported point mass object
@@ -283,6 +285,13 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
       ROS_ERROR("[Se3CopyController]: _load_mass_ <=0, use a value > 0!");
       ros::requestShutdown();
     }
+    if (getenv("BACA_IN_SIMULATION")=="true"){// "True" or "False", then changed into a boolean. 
+      _baca_in_Simulation_=true;
+    }
+    else{
+      _baca_in_Simulation_=false;
+    }
+
   }
   ROS_INFO("[Se3CopyController]: finished loading environment (session/bashrc) parameters");
 
@@ -389,10 +398,10 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   // | ------------------- create subscribers ------------------- |
   // this uav subscribes to own (i.e., of this uav) load states:
   // TODO: this block was initially placed in update function above "get the current heading". Replacing it here, it works in sim, but to be tested on hardware. 
-  if (_run_type_ == "simulation"){ // subscriber of the gazebo simulation
+  if (_run_type_ == "simulation" && !_baca_in_Simulation_ ){ // subscriber of the gazebo simulation
     load_state_sub_ =  nh_.subscribe("/gazebo/link_states", 1, &Se3CopyController::GazeboLoadStatesCallback, this, ros::TransportHints().tcpNoDelay());
   }
-  else if (_run_type_ == "uav"){ // subscriber of the hardware encoders
+  else if (_run_type_ == "uav" || _baca_in_Simulation_ ){ // subscriber of the hardware encoders, if real test or if validation of the bacaprotocol and FK of the encoder are done in simulation.
     std::string slash = "/";
     data_payload_sub_ = nh_.subscribe(slash.append(_uav_name_.append("/serial/received_message")), 1, &Se3CopyController::BacaLoadStatesCallback, this, ros::TransportHints().tcpNoDelay()); // TODO: explain how this is used for 2 uav hardware
   }
