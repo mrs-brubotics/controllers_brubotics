@@ -728,42 +728,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   //  To solve this issue, an average of the position is taken for the 5 first second where the controller is active (i.e., after take-off fully finished)
   //  Then use this value as an offset for the rest of the experiment.
   //  TODO : check if this drift is experienced again. If not, the following lines can be deleted 
-
-    // if(counter_average_encoder < 500){ //between 0 and 5 sec
-    //   counter_average_encoder = counter_average_encoder +1;
-      
-    //   sum_anchoring_pt_pose_=sum_anchoring_pt_pose_+Opl;
-    //   sum_uav_pose_=sum_uav_pose_+Op;
-    //   //to delete once above eq are validated:
-    //   // sum_load_pose.x = sum_load_pose.x + load_pose_position.x;
-    //   // sum_drone_pose.x = sum_drone_pose.x + uav_state->pose.position.x;
-    //   // sum_load_pose.y  = sum_load_pose.y + load_pose_position.y;
-    //   // sum_drone_pose.y = sum_drone_pose.y + uav_state->pose.position.y;
-
-    //   // load_pose_position.x = uav_state->pose.position.x;
-    //   // load_pose_position.y = uav_state->pose.position.y;
-    //   // load_pose_position.z = uav_state->pose.position.z;
-    // }else if(remove_offset_) { //After 5sec.
-    //   average_anchoring_pt_pose_=sum_anchoring_pt_pose_/500.0; //compute average of both UAV and Anchoring point position.
-    //   average_uav_pose_=sum_uav_pose_/500.0;
-    //   offset_anchoring_pt_=average_uav_pose_ - average_anchoring_pt_pose_; //Computed in the same way as Epl. 
-    //   remove_offset_=false; //To only execute this block once.
-
-    //   // average_load_pose.x = sum_load_pose.x/500.0;
-      // average_drone_pose.x = sum_drone_pose.x/500.0;
-      // average_load_pose.y = sum_load_pose.y/500.0;
-      // average_drone_pose.y = sum_drone_pose.y/500.0;
-
-      // offset.x = average_load_pose.x - average_drone_pose.x;
-      // ROS_INFO_STREAM("offset x \n" << offset.x);
-
-      // offset.y = average_load_pose.y - average_drone_pose.y;
-      // ROS_INFO_STREAM("offset x \n" << offset.y);
-
-      // load_pose_position.x = Op[0] + Difference_load_drone_position[0] - offset.x;
-      // load_pose_position.y = Op[1] + Difference_load_drone_position[1] - offset.y;
-      // load_pose_position.z = Op[2] + Difference_load_drone_position[2];      
-    // }         
     
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) { //if offset_anchoring_pt_ is not required, the following lines are the same than the one used in simulation. And it can be put outside the if.
       Eigen::Vector3d e3(0.0, 0.0, 1.0);
@@ -1807,9 +1771,11 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
   if (message_id == 24)
   {
     encoder_angle_1_ = encoder_output; //theta '
+    // ROS_INFO_STREAM("theta " << encoder_angle_1_);
   }else if (message_id == 25)
   {
     encoder_angle_2_ = encoder_output; // Phi '
+    // ROS_INFO_STREAM("phi " << encoder_angle_2_);
   }else if (message_id == 32)
   {
     encoder_velocity_1_ = encoder_output;
