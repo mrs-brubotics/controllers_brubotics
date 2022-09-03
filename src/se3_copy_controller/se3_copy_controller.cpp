@@ -1779,7 +1779,7 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
   }else if (message_id == 32)
   {
     encoder_velocity_1_ = encoder_output;
-  }else
+  }else if (message_id == 33)
   {
     encoder_velocity_2_ = encoder_output;
   }

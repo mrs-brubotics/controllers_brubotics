@@ -20,8 +20,8 @@ default_gains:
     kiw: 0.1
     kiw_lim: 10.0
 
-    kpl: 8.0
-    kvl: 1.0
+    kpl: 0.0 # 8.0
+    kvl: 0.0 # 1.0
 
   # influences yawing
   vertical:
