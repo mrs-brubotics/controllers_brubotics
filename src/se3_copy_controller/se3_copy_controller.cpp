@@ -1697,6 +1697,7 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3CopyController::setC
 // TODO: make single callback called from library as (almost) same callback used in tracker
 // TODO: moreover, as this callabck changes global load state variables at asynchronous and higher rates than the tracker update function, one needs to ensure that the global variables used for the state are always the same everywhere (avoid using different global information as the update function is sequentially executed). For this I think at the start of the update function one can "freeze" those global variables. So create 2 sets of global load variables and use everywhere except in this callabck the frozen variables.
 void Se3CopyController::GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg) {
+    // ROS_INFO_STREAM("GazeboLoadStatesCallback is starting");
     // This callback function is only triggered when doing simulation, and will be used to unpack the data coming from the Gazebo topics to determine the load state (i.e., in terms of anchoring point position and velocity).
     int anchoring_pt_index; // Stores the index at which the anchoring point appears in the message that is received from Gazebo. 
     std::vector<std::string> link_names = loadmsg->name; // Take a vector containing the name of each link in the simulation. Among these there is the links that are related to the payload. 
@@ -1756,6 +1757,7 @@ void Se3CopyController::GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesCo
 // TODO: document and test if this works on hardware
 // TODO: combine with BacaLoadStatesCallback of controller as (almost) same code
 void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConstPtr& msg) {
+  // ROS_INFO_STREAM("BacaLoadStatesCallback is starting");
   // TODO: similar to GazeboLoadStatesCallback, update the variable payload_spawned_ if this the data is correctly received from arduino
   int message_id;
   int payload_1;
@@ -1771,11 +1773,11 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
   if (message_id == 24)
   {
     encoder_angle_1_ = encoder_output; //theta '
-    // ROS_INFO_STREAM("theta " << encoder_angle_1_);
+    //ROS_INFO_STREAM("theta " << encoder_angle_1_);
   }else if (message_id == 25)
   {
     encoder_angle_2_ = encoder_output; // Phi '
-    // ROS_INFO_STREAM("phi " << encoder_angle_2_);
+    //ROS_INFO_STREAM("phi " << encoder_angle_2_);
   }else if (message_id == 32)
   {
     encoder_velocity_1_ = encoder_output;
