@@ -397,7 +397,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   //   ros::requestShutdown();
   // }
 
-  ROS_INFO("[DergbryanTracker]: advertised all publishers.");
+  ROS_INFO("[Se3CopyController]: advertised all publishers.");
   // | ------------------- create subscribers ------------------- |
   // this uav subscribes to own (i.e., of this uav) load states:
   // TODO: this block was initially placed in update function above "get the current heading". Replacing it here, it works in sim, but to be tested on hardware. 

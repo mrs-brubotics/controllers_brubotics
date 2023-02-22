@@ -18,7 +18,6 @@ find_package(catkin REQUIRED COMPONENTS
   )
 
 generate_dynamic_reconfigure_options(
-  cfg/se3_brubotics_controller.cfg 
   cfg/se3_copy_controller.cfg
   )
 
@@ -95,18 +94,6 @@ target_link_libraries(Se3CopyController
   ${catkin_LIBRARIES}
   )
 
-# Se3BruboticsController
-add_library(Se3BruboticsController
-  src/se3_brubotics_controller/se3_brubotics_controller.cpp
-  )
-add_dependencies(Se3BruboticsController
-  ${${PROJECT_NAME}_EXPORTED_TARGETS}
-  ${catkin_EXPORTED_TARGETS}
-  ${PROJECT_NAME}_gencfg
-  )
-target_link_libraries(Se3BruboticsController
-  ${catkin_LIBRARIES}
-  )
 
 
 #############
@@ -115,7 +102,6 @@ target_link_libraries(Se3BruboticsController
 
 install(TARGETS
   Se3CopyController
-  Se3BruboticsController
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
