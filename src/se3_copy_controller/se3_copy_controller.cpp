@@ -973,17 +973,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   Eigen::Vector3d f = position_feedback + velocity_feedback + load_position_feedback + load_velocity_feedback + integral_feedback + feed_forward;
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: fx= %.2f, fy= %.2f, fz=%.2f ",f[0],f[1],f[2]);
 
-  // | ----------- limiting the downwards acceleration ---------- |
-  /* 
-  the downwards force produced by the position and the acceleration feedback should not be larger than the gravity
-  if the downwards part of the force is close to counter-act the gravity acceleration
-   */
+  // | ----------- limiting the desired downwards acceleration and maximum tilt angle ---------- |
   // TODO: check with MPC guidage code if this actually makes sense as i remember to have improved it
   if (f[2] < 0) {
-
     ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
-
-    f << 0, 0, 1;
+    // f << 0, 0, 1; ctu original
+    f << f[0], f[1], 0.0; // saturate the z-component on zero such that the desired tilt angle stays in the upper hemisphere
   }
 
   // | ------------------ limit the tilt angle ------------------ |
@@ -1028,7 +1023,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // saturate the angle
 
   auto constraints = mrs_lib::get_mutexed(mutex_constraints_, constraints_);
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: constraints.tilt = %f", constraints.tilt);
+  // ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: constraints.tilt = %f", constraints.tilt);
+  // ROS_INFO_STREAM("[Se3CopyController]: theta.data = " << theta.data);
   if (fabs(constraints.tilt) > 1e-3 && theta.data > constraints.tilt) {
     ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta.data / M_PI) * 180.0,
                       (constraints.tilt / M_PI) * 180.0);
