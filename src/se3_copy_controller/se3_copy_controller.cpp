@@ -371,18 +371,21 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     }
   }
   ROS_INFO("[Se3CopyController]: advertised all publishers.");
+
   // | ------------------- create subscribers ------------------- |
-  // this uav subscribes to own (i.e., of this uav) load states:
-  if (_run_type_ == "simulation" && !_baca_in_simulation_ ){ // subscriber of the load model spawned in the gazebo simulation
-    load_state_sub_ =  nh_.subscribe("/gazebo/link_states", 1, &Se3CopyController::GazeboLoadStatesCallback, this, ros::TransportHints().tcpNoDelay());
-  }
-  else if (_run_type_ == "uav" || (_baca_in_simulation_ && _run_type_ == "simulation") ){ // subscriber of the hardware encoders, if real test or if simulation-based validation of the bacaprotocol and FK of the encoder are done.
-    std::string slash = "/";
-    data_payload_sub_ = nh_.subscribe(slash.append(_uav_name_.append("/serial/received_message")), 1, &Se3CopyController::BacaLoadStatesCallback, this, ros::TransportHints().tcpNoDelay()); // TODO: explain how this is used for 2 uav hardware
-  }
-  else{ // undefined
-    ROS_ERROR("[Se3CopyController]: undefined _run_type_ used!");
-    ros::requestShutdown();
+  if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){
+    // this uav subscribes to own (i.e., of this uav) load states:
+    if (_run_type_ == "simulation" && !_baca_in_simulation_ ){ // subscriber of the load model spawned in the gazebo simulation
+      load_state_sub_ =  nh_.subscribe("/gazebo/link_states", 1, &Se3CopyController::GazeboLoadStatesCallback, this, ros::TransportHints().tcpNoDelay());
+    }
+    else if (_run_type_ == "uav" || (_baca_in_simulation_ && _run_type_ == "simulation") ){ // subscriber of the hardware encoders, if real test or if simulation-based validation of the bacaprotocol and FK of the encoder are done.
+      std::string slash = "/";
+      data_payload_sub_ = nh_.subscribe(slash.append(_uav_name_.append("/serial/received_message")), 1, &Se3CopyController::BacaLoadStatesCallback, this, ros::TransportHints().tcpNoDelay()); // TODO: explain how this is used for 2 uav hardware
+    }
+    else{ // undefined
+      ROS_ERROR("[Se3CopyController]: undefined _run_type_ used for uav with payload!");
+      ros::requestShutdown();
+    }
   }
   ROS_INFO("[Se3CopyController]: linked all subscribers to their callbacks.");
 
