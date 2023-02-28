@@ -69,7 +69,7 @@ private:
   std::string _type_of_system_;   // defines the dynamic system model to simulate in the prediction using the related controller: can be 1uav_no_payload, 1uav_payload or 2uavs_payload. Set in session.yaml file.
   double _cable_length_;          // length of the cable between payload COM / anchoring point and COM of the UAV
   double _load_mass_;             // feedforward load mass per uav defined in the session.yaml of every test file (session variable also used by the xacro for Gazebo simulation)
-  bool _baca_in_Simulation_=false;// Used to validate the encoder angles, and the FK without having to make the UAV fly. Gains related to payload must be set on 0 to perform this. Set on false by default.
+  bool _baca_in_simulation_=false;// Used to validate the encoder angles, and the FK without having to make the UAV fly. Gains related to payload must be set on 0 to perform this. Set on false by default.
 
   // | ------------------- declaring .yaml parameters (and some related vars & funs) ------------------- |
   // Se3CopyController:
@@ -143,19 +143,12 @@ private:
   ros::Publisher load_pose_publisher_; //Publisher used to publish the absolute position of payload, for both simulation and hardware
   geometry_msgs::Pose anchoring_pt_pose_; //msg to be published as the position of the payload.
   Eigen::Vector3d anchoring_pt_pose_position_ ; //Vector of the absolute position of the payload.
-
   ros::Publisher load_vel_publisher_; //Publisher that publish the absolute velocity of the payload, both for simulation and hardware.
   geometry_msgs::Twist anchoring_pt_velocity_; //Msg used to be published as the velocity of payload
   Eigen::Vector3d anchoring_pt_lin_vel_; //Vector of the absolute velocity of the payload.
-
   ros::Publisher load_position_errors_publisher_; // Publisher that will publish the error on the payload (Epl). 
-  // TODO: do we need these? Don't think so, but check later when doing testing.
-  // ros::Publisher load_pose_experiments_publisher_;
-  // ros::Publisher load_pose_error_publisher_;
-  // ros::Publisher load_velocity_error_publisher_;
   ros::Publisher encoder_angle_1_publisher_; //Publishers used to publish the angles received from the bacaprotocol/Arduino.
   ros::Publisher encoder_angle_2_publisher_;
-
 
   // ---------------
   // ROS Subscribers:
@@ -245,14 +238,11 @@ private:
   // Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
 };
 
-//}
-
 // --------------------------------------------------------------
 // |                   controller's interface                   |
 // --------------------------------------------------------------
 
-/* //{ initialize() */
-
+/* initialize() */
 void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unused]] const std::string name, const std::string name_space, const double uav_mass,
                                std::shared_ptr<mrs_uav_managers::CommonHandlers_t> common_handlers) {
   ROS_INFO("[Se3CopyController]: start of initialize");
@@ -268,7 +258,6 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   _run_type_       = getenv("RUN_TYPE"); 
   _type_of_system_ = getenv("TYPE_OF_SYSTEM"); 
   if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){ // load the required load transportation paramters only if the test is configured for it
-    
     _cable_length_      = std::stod(getenv("CABLE_LENGTH")); 
     if (_type_of_system_=="1uav_payload"){
       _load_mass_         = std::stod(getenv("LOAD_MASS")); // LOAD_MASS is the total load mass of the to be transported point mass object
@@ -286,15 +275,14 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
       ros::requestShutdown();
     }
     std::string BACA_IN_SIMULATION = getenv("BACA_IN_SIMULATION");
-    if (BACA_IN_SIMULATION == "true"){// "true" or "false" as string, then changed into a boolean. 
-      _baca_in_Simulation_=true;
-      // ROS_INFO("[Se3CopyController]: Use Baca in simulation : true");
+    if (BACA_IN_SIMULATION == "true" && _run_type_ == "simulation"){// "true" or "false" as string, then changed into a boolean. 
+      _baca_in_simulation_ = true;
+      ROS_INFO("[Se3CopyController]: Use Baca in simulation: true");
     }
     else{
-      _baca_in_Simulation_=false;
-      // ROS_INFO("[Se3CopyController]: Use Baca in simulation : false");
+      _baca_in_simulation_ = false;
+      ROS_INFO("[Se3CopyController]: Use Baca in simulation: false");
     }
-
   }
   ROS_INFO("[Se3CopyController]: finished loading environment (session/bashrc) parameters");
 
@@ -363,7 +351,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
 
   // | ------------------- create publishers ------------------- |
   // TODO bryan: change below to correct msg types (e.g., do not use PoseArray for a thrust or angle)
-  // UAV:
+  // UAV: always loaded
   uav_state_publisher_   = nh_.advertise<mrs_msgs::UavState>("uav_state",1); // TODO: seems not LOAD specific, why are both tracker and controller publishig on this topic??? Bryan: not issue as will be publish on different topic due to name of controller/tracker before topic name. So can be used to check if the same
   projected_thrust_publisher_ = nh_.advertise<std_msgs::Float64>("custom_projected_thrust",1);
   thrust_publisher_           = nh_.advertise<std_msgs::Float64>("custom_thrust",1);
@@ -373,38 +361,22 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   hover_thrust_publisher_            = nh_.advertise<std_msgs::Float64>("hover_thrust",1);
   tilt_angle_publisher_            = nh_.advertise<std_msgs::Float64>("tilt_angle",1);
   // LOAD (1 & 2 UAVs):
-  // TODO: clean comments at and of controller/tracker
-  // Depending on _run_type_ we publish to different topics
-  // TODO: feels sloppy to use different topic names for same physical variable. The actual topics you publish info to (e.g. for graphs or other nodes) should be the same and independent of the load. There should be at least some topics and publishers used for both runtypes and only those specific like encoder angles you have only for specific run_type.
-  // TODO: links between publisher and topic names very unclear
-  // Make sure that if you publish to a topic here, the tracker is not doing the same.
-  // if (_run_type_ == "simulation") //publishers for anchoring point/load information when running simulations
-  // { 
+  if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){
     load_pose_publisher_   = nh_.advertise<geometry_msgs::Pose>("load_pose",1);
     load_vel_publisher_   = nh_.advertise<geometry_msgs::Twist>("load_vel",1);
-    load_position_errors_publisher_ = nh_.advertise<geometry_msgs::Pose>("load_position_errors",1); //TODO Might be useless if we do this computation in matlab as in the RAL plots.
-  // }// TODO: case below has no use, why are you making cases?
-  // else if ((_run_type_ == "uav")){ // publishers for encoders when running hardware experiments
-    // load_pose_experiments_publisher_   = nh_.advertise<geometry_msgs::Vector3>("load_pose_position",1); // TODO: unused...?
-    // load_pose_error_publisher_ = nh_.advertise<geometry_msgs::Vector3>("load_pose_error",1); // TODO: unused...?
-    // load_velocity_error_publisher_ = nh_.advertise<geometry_msgs::Vector3>("load_velocity_error",1); // TODO: unused..?
-    // TODO It would be good to have a topic of this so we can always log the raw encoder data.
-  encoder_angle_1_publisher_ = nh_.advertise<std_msgs::Float64>("encoder_angle_1",1); //theta' // TODO: unclear what angle 1 and 2 is
-  encoder_angle_2_publisher_ = nh_.advertise<std_msgs::Float64>("encoder_angle_2",1); //phi'
-  // } 
-  // else {
-  //   ROS_ERROR("[Se3CopyController]: _run_type_ undefined!");
-  //   ros::requestShutdown();
-  // }
-
+    load_position_errors_publisher_ = nh_.advertise<geometry_msgs::Pose>("load_position_errors",1);
+    if((_run_type_ == "uav") || _baca_in_simulation_){
+      encoder_angle_1_publisher_ = nh_.advertise<std_msgs::Float64>("encoder_angle_1",1); // theta'
+      encoder_angle_2_publisher_ = nh_.advertise<std_msgs::Float64>("encoder_angle_2",1); // phi'
+    }
+  }
   ROS_INFO("[Se3CopyController]: advertised all publishers.");
   // | ------------------- create subscribers ------------------- |
   // this uav subscribes to own (i.e., of this uav) load states:
-  // TODO: this block was initially placed in update function above "get the current heading". Replacing it here, it works in sim, but to be tested on hardware. 
-  if (_run_type_ == "simulation" && !_baca_in_Simulation_ ){ // subscriber of the gazebo simulation
+  if (_run_type_ == "simulation" && !_baca_in_simulation_ ){ // subscriber of the load model spawned in the gazebo simulation
     load_state_sub_ =  nh_.subscribe("/gazebo/link_states", 1, &Se3CopyController::GazeboLoadStatesCallback, this, ros::TransportHints().tcpNoDelay());
   }
-  else if (_run_type_ == "uav" || _baca_in_Simulation_ ){ // subscriber of the hardware encoders, if real test or if validation of the bacaprotocol and FK of the encoder are done in simulation.
+  else if (_run_type_ == "uav" || (_baca_in_simulation_ && _run_type_ == "simulation") ){ // subscriber of the hardware encoders, if real test or if simulation-based validation of the bacaprotocol and FK of the encoder are done.
     std::string slash = "/";
     data_payload_sub_ = nh_.subscribe(slash.append(_uav_name_.append("/serial/received_message")), 1, &Se3CopyController::BacaLoadStatesCallback, this, ros::TransportHints().tcpNoDelay()); // TODO: explain how this is used for 2 uav hardware
   }
@@ -449,10 +421,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   is_initialized_ = true;
 }
 
-//}
-
 /* //{ activate() */
-
 bool Se3CopyController::activate(const mrs_msgs::AttitudeCommand::ConstPtr& last_attitude_cmd) {
 
   if (last_attitude_cmd == mrs_msgs::AttitudeCommand::Ptr()) {
@@ -705,7 +674,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   Eigen::Vector3d Epl = Eigen::Vector3d::Zero(3); // load position control error
   Eigen::Vector3d Evl = Eigen::Vector3d::Zero(3); // load velocity control error
-  // ROS_INFO_STREAM("Usebaca \n" << _baca_in_Simulation_);
+  // ROS_INFO_STREAM("Usebaca \n" << _baca_in_simulation_);
   if (_run_type_ == "simulation" && payload_spawned_){
     // load position control error
     if (control_reference->use_position_horizontal || control_reference->use_position_vertical) {
@@ -761,10 +730,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         // load_velocity_error.y = -Evl[1];
         // load_velocity_error.z = -Evl[2];
 
-        // load_pose_experiments_publisher_.publish(load_pose_position);
-        
-        // load_pose_error_publisher_.publish(load_pose_error);
-        // load_velocity_error_publisher_.publish(load_velocity_error);
 
         // // ROS_INFO_STREAM("Se3BruboticsLoadController: Load_pose_position = \n" << load_pose_position);
         // // ROS_INFO_STREAM("Se3BruboticsLoadController: Epl (Rpl-load_pose)= \n" << Epl);
