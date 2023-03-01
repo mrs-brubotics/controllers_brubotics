@@ -71,3 +71,7 @@ rotation_matrix: 1 # {0 = lee, 1 = baca (oblique projection}
 
 # output mode to PixHawk
 output_mode: 0 # {0 = attitude_rate, 1 = orientation}
+
+
+payload:
+  Epl_min: 0.05 # [m], below this payload error norm, the payload error is disabled
