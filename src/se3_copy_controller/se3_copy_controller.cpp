@@ -65,6 +65,8 @@ private:
 
   // | ------------------- declaring env (session/bashrc) parameters ------------------- |
   std::string _uav_name_;         // uavID
+  std::string _leader_uav_name_;  // leader uavID for 2uavs payload transport
+  std::string _follower_uav_name_;// follower uavID for 2uavs payload transport
   std::string _run_type_;         // set to "simulation" (for Gazebo simulation) OR "uav" (for hardware testing) defined in bashrc or session.yaml. Used for payload transport as payload position comes from two different callbacks depending on how the test is ran (in sim or on real UAV).
   std::string _type_of_system_;   // defines the dynamic system model to simulate in the prediction using the related controller: can be 1uav_no_payload, 1uav_payload or 2uavs_payload. Set in session.yaml file.
   double _cable_length_;          // length of the cable between payload COM / anchoring point and COM of the UAV
@@ -264,8 +266,15 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     }
     else if (_type_of_system_=="2uavs_payload"){ 
       _load_mass_ = 0.50 * std::stod(getenv("LOAD_MASS")); // in case of 2uavs, each uav takes only half of the total bar-type load
+      _leader_uav_name_ = "uav"+std::to_string(std::stoi(getenv("LEADER_UAV_ID")));
+      _follower_uav_name_ = "uav"+std::to_string(std::stoi(getenv("FOLLOWER_UAV_ID")));
+      // Sanity check:
+      if(_uav_name_ !=_leader_uav_name_ && _uav_name_ !=_follower_uav_name_){
+        ROS_ERROR("[Se3CopyController]: _uav_name_ is different from _leader_uav_name_ and _follower_uav_name_!");
+        ros::requestShutdown();
+      }
     }
-    // Sanity checks:
+    // More sanity checks:
     if(_cable_length_ <=0){
       ROS_ERROR("[Se3CopyController]: _cable_length_ <=0, use a value > 0!");
       ros::requestShutdown();
@@ -1672,15 +1681,15 @@ void Se3CopyController::GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesCo
           payload_spawned_ = true; // Notify that the payload has spawned. This will only be triggered once and allow predictions to start.
         }
       }
-      if (_type_of_system_ == "2uavs_payload"){ // 2UAVs transporting beam payload case. Need to return different link if this UAV is the uav1 or 2. 
-        if (_uav_name_=="uav1"){
-          if(link_names[i] == "bar::link_04"){ //link_04 corresponds to the anchoring point of uav1 (see bar.xacro)
+      if (_type_of_system_ == "2uavs_payload"){ // 2UAVs transporting beam payload case. Need to return different link if this UAV is the leader uav or follower uav. 
+        if (_uav_name_==_leader_uav_name_){
+          if(link_names[i] == "bar::link_04"){ //link_04 corresponds to the anchoring point of the leader uav (see bar.xacro)
               anchoring_pt_index = i;
               payload_spawned_ = true;
           }
         }
-        else if (_uav_name_=="uav2") { // for uav2
-          if(link_names[i] == "bar::link_01"){ //link_01 corresponds to the anchoring point of uav1 (see bar.xacro)
+        else if (_uav_name_==_follower_uav_name_) { // for the follower uav
+          if(link_names[i] == "bar::link_01"){ //link_01 corresponds to the anchoring point of the leader uav (see bar.xacro)
               anchoring_pt_index = i;
               payload_spawned_ = true;
           }
