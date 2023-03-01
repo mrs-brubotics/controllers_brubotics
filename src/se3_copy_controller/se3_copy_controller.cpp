@@ -176,6 +176,7 @@ private:
   
   // | ------------------ initialization ----------------- |
   bool is_initialized_ = false;
+  double dt_ = 0.010; // DO NOT CHANGE! Hardcoded controller sample time = controller sample time TODO: obtain via loop rate, see MpcTracker
 
   // | ------------------ activation and output ----------------- |
   mrs_msgs::AttitudeCommand::ConstPtr last_attitude_cmd_;
@@ -1668,7 +1669,7 @@ const mrs_msgs::DynamicsConstraintsSrvResponse::ConstPtr Se3CopyController::setC
 // | ----------------- LOAD ----------------------------------------- | 
 // | ----------------- load subscribtion callback --------------|
 // TODO: make single callback called from library as (almost) same callback used in tracker
-// TODO: moreover, as this callabck changes global load state variables at asynchronous and higher rates than the tracker update function, one needs to ensure that the global variables used for the state are always the same everywhere (avoid using different global information as the update function is sequentially executed). For this I think at the start of the update function one can "freeze" those global variables. So create 2 sets of global load variables and use everywhere except in this callabck the frozen variables.
+// TODO: moreover, as this callback changes global load state variables at asynchronous and higher rates than the tracker update function, one needs to ensure that the global variables used for the state are always the same everywhere (avoid using different global information as the update function is sequentially executed). For this I think at the start of the update function one can "freeze" those global variables. So create 2 sets of global load variables and use everywhere except in this callabck the frozen variables.
 void Se3CopyController::GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg) {
     // ROS_INFO_STREAM("GazeboLoadStatesCallback is starting");
     // This callback function is only triggered when doing simulation, and will be used to unpack the data coming from the Gazebo topics to determine the load state (i.e., in terms of anchoring point position and velocity).
@@ -1735,6 +1736,7 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
   int message_id;
   int payload_1;
   int payload_2;
+
   message_id = msg->payload[0];
   payload_1 = msg->payload[1];
   payload_2 = msg->payload[2];
@@ -1759,7 +1761,15 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
     encoder_velocity_2_ = encoder_output;
   }
 
-  // Sanity check
+  // Sanity checks
+  /* in theory, the encoder angles would be possibe to have in the range [-M_PI/2.0, M_PI/2.0], but in practice
+  the encoder fixation is results in different offsets for each UAV*/
+  double encoder_angle_1_max = 1.24;
+  double encoder_angle_1_min = -2.04;
+  double encoder_angle_2_max = 2.13;
+  double encoder_angle_2_min = -1.61;
+  double msg_time_delay = std::abs(msg->stamp.toSec() - uav_state_.header.stamp.toSec());
+  int bound_num_samples_delay = 2;
   if (!std::isfinite(encoder_angle_1_)||!std::isfinite(encoder_angle_2_)) {
     ROS_ERROR("[Se3CopyController]: NaN detected in encoder angles");
     payload_spawned_=false; //Put payload_spawned back to false in case the encoder stops giving finite values during a flight. Epl stays equal to zero when this flag is false, avoiding strange behaviors or non finite Epl. 
@@ -1768,9 +1778,17 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
     ROS_ERROR("[Se3CopyController]: NaN detected in encoder angular velocities");
     payload_spawned_=false;  
   }
+  else if ((encoder_angle_1_>encoder_angle_1_max && encoder_angle_1_< encoder_angle_1_min) || (encoder_angle_2_>encoder_angle_2_max && encoder_angle_2_< encoder_angle_2_min)) {
+    ROS_ERROR("[DergbryanTracker]: Out of expected range [-pi/2, pi/2] detected in encoder angles");
+    payload_spawned_=false; 
+  }
+  else if (msg_time_delay > dt_*bound_num_samples_delay) {
+    ROS_ERROR("[DergbryanTracker]: Encoder msg is delayed by at least %d samples and is = %f", bound_num_samples_delay, msg_time_delay);
+    payload_spawned_=false; 
+  }
   else{
-    ROS_INFO_THROTTLE(20.0,"[Se3CopyController]: Encoder angles returned are finite values");
-    payload_spawned_=true; // Values are finite and thus can be used to compute a finite
+    ROS_INFO_THROTTLE(20.0,"[Se3CopyController]: Encoder angles and angular velocities returned are finite values and the angles are within the expected range");
+    payload_spawned_=true; // Values are finite and withing the expect range and thus can be used in the computations
   }
 
   Eigen::Vector3d anchoring_pt_pose_position_rel ; // position of the payload in the body frame B
