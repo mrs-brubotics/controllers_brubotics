@@ -2,6 +2,6 @@
 Se3CopyController:
   address: "controllers_brubotics/Se3CopyController"
   namespace: "se3_copy_controller"
-  eland_threshold: 300 # 1.5 = original CTU value [m], position error triggering eland
-  failsafe_threshold: 300 # 2.5 = original CTU value [m], position error triggering failsafe land
-  odometry_innovation_threshold: 300 # 1.5 = original CTU value [m], position odometry innovation threshold
+  eland_threshold: 200 # 1.5 = original CTU value [m], position error triggering eland, needs to be large to give large step commands
+  failsafe_threshold: 300 # 2.5 = original CTU value [m], position error triggering failsafe land, needs to be large to give large step commands
+  odometry_innovation_threshold: 1.5 #300 # 1.5 = original CTU value [m], position odometry innovation threshold

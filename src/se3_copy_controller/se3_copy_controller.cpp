@@ -127,6 +127,8 @@ private:
   std::mutex mutex_gains_;       // locks the gains the are used and filtered
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
   double _Epl_min_; // [m], below this payload error norm, the payload error is disabled
+  bool _Epl_max_failsafe_enabled_;
+  double _Epl_max_scaling_; // [m]
   // ---------------
   // ROS Publishers:
   // ---------------
@@ -342,7 +344,8 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("angular_rate_feedforward/jerk", drs_params_.jerk_feedforward);
   // payload:
   param_loader.loadParam("payload/Epl_min", _Epl_min_);
- 
+  param_loader.loadParam("payload/Epl_max/failsafe_enabled", _Epl_max_failsafe_enabled_);
+  param_loader.loadParam("payload/Epl_max/scaling", _Epl_max_scaling_);
   
   
   if (!param_loader.loadedSuccessfully()) {
@@ -696,11 +699,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       Evl = Ov - Ovl; // speed relative to base frame
     }
     
-    // Sanity checks: 
-    if (Epl.norm()>_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
+    // Sanity + safety checks: 
+    if (Epl.norm()> _Epl_max_scaling_*_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
       ROS_ERROR("[se3_copy_controller]: Control error of the anchoring point Epl was larger than expected (> _cable_length_*sqrt(2)), hence it has been set to zero");
       Epl = Eigen::Vector3d::Zero(3);
-      // TODO: trigger eland?
+      if (_Epl_max_failsafe_enabled_){
+        return mrs_msgs::AttitudeCommand::ConstPtr(); // trigger eland
+      }
     }
     // Ignore small load position errors to deal with small, but non-zero load offsets in steady-state and prevent aggressive actions on small errors 
     if(Epl.norm() < _Epl_min_){ // When the payload is very close to equilibrium vertical position, the error is desactivated so the UAV doesn't try to compensate and let it damp naturally.
