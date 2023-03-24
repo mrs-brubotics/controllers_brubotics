@@ -527,7 +527,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     uav_state_publisher_.publish(uav_state_);
   }
   catch (...) {
-    ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", uav_state_publisher_.getTopic().c_str());
+    ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", uav_state_publisher_.getTopic().c_str());
   }
 
   // Op - position in global frame
@@ -701,15 +701,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     
     // Sanity + safety checks: 
     if (Epl.norm()> _Epl_max_scaling_*_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
-      ROS_ERROR("[se3_copy_controller]: Control error of the anchoring point Epl was larger than expected (> _cable_length_*sqrt(2)), hence it has been set to zero");
-      Epl = Eigen::Vector3d::Zero(3);
+      ROS_ERROR("[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_*_cable_length_*sqrt(2));
+      // Epl = Eigen::Vector3d::Zero(3);
       if (_Epl_max_failsafe_enabled_){
         return mrs_msgs::AttitudeCommand::ConstPtr(); // trigger eland
       }
     }
     // Ignore small load position errors to deal with small, but non-zero load offsets in steady-state and prevent aggressive actions on small errors 
     if(Epl.norm() < _Epl_min_){ // When the payload is very close to equilibrium vertical position, the error is desactivated so the UAV doesn't try to compensate and let it damp naturally.
-      ROS_INFO_THROTTLE(1.0,"[se3_copy_controller]: Control error of the anchoring point Epl = %fm < _Epl_min_ = %fm, hence it has been set to zero", Epl.norm(), _Epl_min_);
+      ROS_INFO_THROTTLE(1.0,"[Se3CopyController]: Control error of the anchoring point Epl = %.02fm < _Epl_min_ = %.02fm, hence it has been set to zero", Epl.norm(), _Epl_min_);
       Epl = Eigen::Vector3d::Zero(3);
     }
   }
@@ -724,7 +724,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     load_position_errors_publisher_.publish(load_position_errors);
   }
   catch (...) {
-    ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", load_position_errors_publisher_.getTopic().c_str());
+    ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", load_position_errors_publisher_.getTopic().c_str());
   }
   
   // | --------------------- load the gains --------------------- |
@@ -916,8 +916,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // TODO: check with MPC guidage code if this actually makes sense as i remember to have improved it
   if (f[2] < 0) {
     ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
-    // f << 0, 0, 1; ctu original
-    f << f[0], f[1], 0.0; // saturate the z-component on zero such that the desired tilt angle stays in the upper hemisphere
+    f << 0, 0, 1; // ctu original
+    // f << f[0], f[1], 0.0; // saturate the z-component on zero such that the desired tilt angle stays in the upper hemisphere
   }
 
   // | ------------------ limit the tilt angle ------------------ |
@@ -1679,13 +1679,13 @@ void Se3CopyController::GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesCo
       load_pose_publisher_.publish(anchoring_pt_pose_);
     }
     catch (...) {
-      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", load_pose_publisher_.getTopic().c_str());
+      ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", load_pose_publisher_.getTopic().c_str());
     }
     try {
       load_vel_publisher_.publish(anchoring_pt_velocity_);
     }
     catch (...) {
-      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", load_vel_publisher_.getTopic().c_str());
+      ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", load_vel_publisher_.getTopic().c_str());
     }
 }
 
@@ -1800,25 +1800,25 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
       load_pose_publisher_.publish(anchoring_pt_pose_);
     }
     catch (...) {
-      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", load_pose_publisher_.getTopic().c_str());
+      ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", load_pose_publisher_.getTopic().c_str());
     }
     try {
       load_vel_publisher_.publish(anchoring_pt_velocity_);
     }
     catch (...) {
-      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", load_vel_publisher_.getTopic().c_str());
+      ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", load_vel_publisher_.getTopic().c_str());
     }
     try {
       encoder_angle_1_publisher_.publish(encoder_angle_1_to_publish_);
     }
     catch (...) {
-      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", encoder_angle_1_publisher_.getTopic().c_str());
+      ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", encoder_angle_1_publisher_.getTopic().c_str());
     }
     try {
       encoder_angle_2_publisher_.publish(encoder_angle_2_to_publish_);
     }
     catch (...) {
-      ROS_ERROR("[se3_copy_controller]: Exception caught during publishing topic %s.", encoder_angle_2_publisher_.getTopic().c_str());
+      ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", encoder_angle_2_publisher_.getTopic().c_str());
     }
   } 
   else{
