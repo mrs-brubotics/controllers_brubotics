@@ -70,6 +70,7 @@ private:
   std::string _run_type_;         // set to "simulation" (for Gazebo simulation) OR "uav" (for hardware testing) defined in bashrc or session.yaml. Used for payload transport as payload position comes from two different callbacks depending on how the test is ran (in sim or on real UAV).
   std::string _type_of_system_;   // defines the dynamic system model to simulate in the prediction using the related controller: can be 1uav_no_payload, 1uav_payload or 2uavs_payload. Set in session.yaml file.
   double _cable_length_;          // length of the cable between payload COM / anchoring point and COM of the UAV
+  double _cable_length_offset_; // accounts for the fact that the cable is attached below the UAV's COM
   double _load_mass_;             // feedforward load mass per uav defined in the session.yaml of every test file (session variable also used by the xacro for Gazebo simulation)
   bool _baca_in_simulation_=false;// Used to validate the encoder angles, and the FK without having to make the UAV fly. Gains related to payload must be set on 0 to perform this. Set on false by default.
 
@@ -253,6 +254,8 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   _type_of_system_ = getenv("TYPE_OF_SYSTEM"); 
   if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){ // load the required load transportation paramters only if the test is configured for it
     _cable_length_      = std::stod(getenv("CABLE_LENGTH")); 
+    _cable_length_offset_ = - std::stod(getenv("UAV_LOAD_OFFSET_Z")); 
+    _cable_length_ = _cable_length_ + _cable_length_offset_;
     if (_type_of_system_=="1uav_payload"){
       _load_mass_         = std::stod(getenv("LOAD_MASS")); // LOAD_MASS is the total load mass of the to be transported point mass object
     }
