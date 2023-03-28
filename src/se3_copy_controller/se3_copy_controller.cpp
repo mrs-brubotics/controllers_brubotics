@@ -89,6 +89,8 @@ private:
   double kibxy_lim_;  // body xy integral limit
   double kpz_;        // position z gain
   double kvz_;        // velocity z gain
+  double kplz_;       // load position z gain
+  double kvlz_;       // load velocity z gain
   double kaz_;        // acceleration z gain (feed forward, =1)
   double km_;         // mass estimator gain
   double km_lim_;     // mass estimator limit
@@ -306,13 +308,16 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("default_gains/horizontal/kib", kibxy_);
   param_loader.loadParam("default_gains/horizontal/kiw_lim", kiwxy_lim_);
   param_loader.loadParam("default_gains/horizontal/kib_lim", kibxy_lim_);
-  // Lateral gains for load damping part of the controller:
+  // lateral gains for load damping part of the controller:
   param_loader.loadParam("default_gains/horizontal/kpl", kplxy_);
   param_loader.loadParam("default_gains/horizontal/kvl", kvlxy_);
   // vertical gains:
   param_loader.loadParam("default_gains/vertical/kp", kpz_);
   param_loader.loadParam("default_gains/vertical/kv", kvz_);
   param_loader.loadParam("default_gains/vertical/ka", kaz_);
+  // load gains vertical:
+  param_loader.loadParam("default_gains/vertical/kpl", kplz_);
+  param_loader.loadParam("default_gains/vertical/kvl", kvlz_);
   // mass estimator (vertical) gains and limits:
   param_loader.loadParam("default_gains/mass_estimator/km", km_);
   param_loader.loadParam("default_gains/mass_estimator/km_lim", km_lim_);
@@ -811,6 +816,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       Kpl[1] = 0;
     }
 
+    if (control_reference->use_position_vertical) {
+      Kpl[2] = kplz_;
+    } else {
+      Kpl[2] = 0;
+    }
+
     if (control_reference->use_velocity_horizontal) {
       Kdl[0] = kvlxy_;
       Kdl[1] = kvlxy_;
@@ -818,10 +829,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       Kdl[0] = 0;
       Kdl[1] = 0;
     }
-    // Do not compensate the anchoring point position/speed in the z direction, so its gains are kept on zero
 
-    // ROS_INFO_STREAM("Kpl" <<  Kpl);
-    // ROS_INFO_STREAM("Kdl" <<  Kdl);
+    if (control_reference->use_velocity_vertical) {
+      Kdl[2] = kvlz_;
+    } 
+    else if (control_reference->use_position_vertical) {  // special case: want to control z-pos but not the velocity => at least provide z dampening
+      Kdl[2] = kvlz_;
+    } else {
+      Kdl[2] = 0;
+    }
   } 
   
   // | ------------------------compute total_mass --------------------------------------|
@@ -856,8 +872,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_z*m = %f", Kv(2));
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kpl_x*m = %f", Kpl(0));
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kpl_y*m = %f", Kpl(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kpl_z*m = %f", Kpl(2));
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_x*m = %f", Kdl(0));
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_y*m = %f", Kdl(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_z*m = %f", Kdl(2));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_x = %f", Kq(0));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_y = %f", Kq(1));
+  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_z = %f", Kq(2));
 
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: _uav_mass_ = %f", _uav_mass_);
   ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: uav_mass_difference_ (estimated)= %f", uav_mass_difference_);
