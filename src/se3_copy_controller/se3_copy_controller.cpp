@@ -395,9 +395,10 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     }
     else if (_run_type_ == "uav" || (_baca_in_simulation_ && _run_type_ == "simulation") ){ // subscriber of the hardware encoders, if real test or if simulation-based validation of the bacaprotocol and FK of the encoder are done.
       std::string slash = "/";
-      ROS_INFO_STREAM("[Se3CopyController]: uav_name_ = " << _uav_name_);
-      data_payload_sub_ = nh_.subscribe(slash.append(_uav_name_.append("/serial/received_message")), 1, &Se3CopyController::BacaLoadStatesCallback, this, ros::TransportHints().tcpNoDelay()); // TODO: explain how this is used for 2 uav hardware
-      ROS_INFO_STREAM("[Se3CopyController]: uav_name_ after subscribe BacaLoadStatesCallback = " << _uav_name_);
+      std::string _uav_name_copy_ = _uav_name_;
+      // ROS_INFO_STREAM("[Se3CopyController]: uav_name_ = " << _uav_name_);
+      data_payload_sub_ = nh_.subscribe(slash.append(_uav_name_copy_.append("/serial/received_message")), 1, &Se3CopyController::BacaLoadStatesCallback, this, ros::TransportHints().tcpNoDelay()); // TODO: explain how this is used for 2 uav hardware
+      // ROS_INFO_STREAM("[Se3CopyController]: uav_name_ after subscribe BacaLoadStatesCallback = " << _uav_name_);
     }
     else{ // undefined
       ROS_ERROR("[Se3CopyController]: undefined _run_type_ used for uav with payload!");
