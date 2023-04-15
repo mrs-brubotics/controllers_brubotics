@@ -28,6 +28,7 @@
 
 // custom publisher
 #include <std_msgs/Float64.h>
+#include <mrs_msgs/BoolStamped.h>
 
 //}
 
@@ -149,13 +150,18 @@ private:
   //|-----------------------------LOAD--------------------------------|//
   ros::Publisher load_pose_publisher_; //Publisher used to publish the absolute position of payload, for both simulation and hardware
   geometry_msgs::Pose anchoring_pt_pose_; //msg to be published as the position of the payload.
-  Eigen::Vector3d anchoring_pt_pose_position_ ; //Vector of the absolute position of the payload.
+  Eigen::Vector3d anchoring_pt_pose_position_; //Vector of the absolute position of the payload.
   ros::Publisher load_vel_publisher_; //Publisher that publish the absolute velocity of the payload, both for simulation and hardware.
   geometry_msgs::Twist anchoring_pt_velocity_; //Msg used to be published as the velocity of payload
   Eigen::Vector3d anchoring_pt_lin_vel_; //Vector of the absolute velocity of the payload.
   ros::Publisher load_position_errors_publisher_; // Publisher that will publish the error on the payload (Epl). 
   ros::Publisher encoder_angle_1_publisher_; //Publishers used to publish the angles received from the bacaprotocol/Arduino.
   ros::Publisher encoder_angle_2_publisher_;
+  //|-----------------------------2UAVs safety communication--------------------------------|//
+  ros::Publisher Eland_controller_leader_to_follower_pub_;
+  ros::Publisher Eland_controller_follower_to_leader_pub_;
+  ros::Publisher time_delay_Eland_controller_leader_to_follower_pub_;
+  ros::Publisher time_delay_Eland_controller_follower_to_leader_pub_;
 
   // ---------------
   // ROS Subscribers:
@@ -170,6 +176,20 @@ private:
   float encoder_angle_2_;
   float encoder_velocity_1_;//Angular velocities returned by Arduino/Encoders via Bacaprotocol
   float encoder_velocity_2_;
+
+  // 2UAVs safety communication
+  ros::Subscriber Eland_controller_leader_to_follower_sub_;
+  void ElandLeaderToFollowerCallback(const mrs_msgs::BoolStamped& msg);
+  mrs_msgs::BoolStamped Eland_controller_leader_to_follower_;
+  std_msgs::Float64 time_delay_Eland_controller_leader_to_follower_out_;
+  ros::Subscriber Eland_controller_follower_to_leader_sub_; 
+  void ElandFollowerToLeaderCallback(const mrs_msgs::BoolStamped& msg);
+  mrs_msgs::BoolStamped Eland_controller_follower_to_leader_;
+  std_msgs::Float64 time_delay_Eland_controller_follower_to_leader_out_;
+  double _max_time_delay_on_callback_data_follower_;
+  double _max_time_delay_on_callback_data_leader_;
+  bool both_uavs_ready = false;
+
 
   // | ------------------------ integrals ----------------------- |
   Eigen::Vector2d Ib_b_;  // body error integral in the body frame
@@ -246,6 +266,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   _uav_mass_ = uav_mass;
   common_handlers_ = common_handlers;
   ros::NodeHandle nh_(parent_nh, name_space); // NodeHandle for Se3CopyController, used to load controller params
+  ros::NodeHandle nh2_(parent_nh, "dergbryan_tracker"); // NodeHandle 2 for DergbryanTracker, used to load tracker params
   ros::Time::waitForValid();
   
   // | ------------------- loading env (session/bashrc) parameters ------------------- |
@@ -364,6 +385,18 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     ROS_INFO("[Se3CopyController]: correctly loaded all Se3CopyController parameters!");
   }
 
+  mrs_lib::ParamLoader param_loader2(nh2_, "DergbryanTracker");
+  param_loader2.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
+  param_loader2.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
+
+  if (!param_loader2.loadedSuccessfully()) {
+    ROS_ERROR("[Se3CopyController]: could not load all DergbryanTracker parameters!");
+    ros::requestShutdown();
+  } 
+  else{
+    ROS_INFO("[Se3CopyController]: correctly loaded all DergbryanTracker parameters!");
+  }
+
   // | ------------------- create publishers ------------------- |
   // TODO bryan: change below to correct msg types (e.g., do not use PoseArray for a thrust or angle)
   // UAV: always loaded
@@ -385,6 +418,19 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
       encoder_angle_2_publisher_ = nh_.advertise<std_msgs::Float64>("encoder_angle_2",1); // phi'
     }
   }
+
+  // 2UAVs safety communication
+  if(_type_of_system_=="2uavs_payload"){
+    if (_uav_name_ == _leader_uav_name_){  // leader
+      Eland_controller_leader_to_follower_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_l_to_f",1);
+      time_delay_Eland_controller_follower_to_leader_pub_ = nh_.advertise<std_msgs::Float64>("time_delay_Eland_controller_follower_to_leader",1);
+    }
+    else if(_uav_name_ == _follower_uav_name_){
+      Eland_controller_follower_to_leader_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_f_to_l",1);
+      time_delay_Eland_controller_leader_to_follower_pub_ = nh_.advertise<std_msgs::Float64>("time_delay_Eland_controller_leader_to_follower",1);
+    }  
+  }
+
   ROS_INFO("[Se3CopyController]: advertised all publishers.");
 
   // | ------------------- create subscribers ------------------- |
@@ -405,6 +451,17 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
       ros::requestShutdown();
     }
   }
+
+  // 2UAVs safety communication
+  if(_type_of_system_=="2uavs_payload"){
+    if (_uav_name_ == _leader_uav_name_){  // leader
+      Eland_controller_follower_to_leader_sub_ = nh_.subscribe("/"+_follower_uav_name_+"/control_manager/se3_copy_controller/Eland_contr_f_to_l", 1, &Se3CopyController::ElandFollowerToLeaderCallback, this, ros::TransportHints().tcpNoDelay());
+    }
+    else if(_uav_name_ == _follower_uav_name_){
+      Eland_controller_leader_to_follower_sub_ = nh_.subscribe("/"+_leader_uav_name_+"/control_manager/se3_copy_controller/Eland_contr_l_to_f", 1, &Se3CopyController::ElandLeaderToFollowerCallback, this, ros::TransportHints().tcpNoDelay());
+    }  
+  }
+
   ROS_INFO("[Se3CopyController]: linked all subscribers to their callbacks.");
 
   // | ---------------- prepare stuff from params --------------- |
@@ -540,6 +597,98 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   catch (...) {
     ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", uav_state_publisher_.getTopic().c_str());
   }
+
+
+  // | ----------------- 2UAVs safety communication --------------|
+  if(_type_of_system_=="2uavs_payload" && payload_spawned_){
+    ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: Starting 2UAVs safety communication");
+    if(_uav_name_==_leader_uav_name_){
+      ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: leader");
+      if(Eland_controller_follower_to_leader_.data){
+        ROS_WARN("[Se3CopyController]: Triggering Eland (2)");
+        return mrs_msgs::AttitudeCommand::ConstPtr();
+      }
+      time_delay_Eland_controller_follower_to_leader_out_.data = (ros::Time::now() - Eland_controller_follower_to_leader_.stamp).toSec();
+      ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
+      try {
+        time_delay_Eland_controller_follower_to_leader_pub_.publish(time_delay_Eland_controller_follower_to_leader_out_);
+      }
+      catch (...) {
+        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", time_delay_Eland_controller_follower_to_leader_pub_.getTopic().c_str());
+      }
+
+      if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_on_callback_data_leader_ && !both_uavs_ready){
+        ROS_INFO_STREAM("[Se3CopyController]: both_uavs_ready");
+        both_uavs_ready = true;
+      }
+
+      if(time_delay_Eland_controller_follower_to_leader_out_.data > 2*_max_time_delay_on_callback_data_leader_ && both_uavs_ready){
+        Eland_controller_leader_to_follower_.data = true;
+        try {
+          Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
+        }
+        catch (...) {
+          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
+        }
+        ROS_WARN("[Se3CopyController]: Triggering Eland (1)");
+        return mrs_msgs::AttitudeCommand::ConstPtr();
+      }
+      else{
+        ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: Eland_controller_leader_to_follower = false");
+        Eland_controller_leader_to_follower_.data = false;
+        try {
+          Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
+        }
+        catch (...) {
+          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
+        }
+      }
+    }
+    else if(_uav_name_==_follower_uav_name_){
+      ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: follower");
+      if(Eland_controller_leader_to_follower_.data){
+        ROS_WARN("[Se3CopyController]: Triggering Eland (2)");
+        return mrs_msgs::AttitudeCommand::ConstPtr();
+      }
+      time_delay_Eland_controller_leader_to_follower_out_.data = (ros::Time::now() - Eland_controller_leader_to_follower_.stamp).toSec();
+      ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
+      try {
+        time_delay_Eland_controller_leader_to_follower_pub_.publish(time_delay_Eland_controller_leader_to_follower_out_);
+      }
+      catch (...) {
+        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", time_delay_Eland_controller_leader_to_follower_pub_.getTopic().c_str());
+      }
+
+      if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_on_callback_data_leader_ && !both_uavs_ready){
+        ROS_INFO_STREAM("[Se3CopyController]: both_uavs_ready");
+        both_uavs_ready = true;
+      }
+
+      if(time_delay_Eland_controller_leader_to_follower_out_.data > 2*_max_time_delay_on_callback_data_follower_ && both_uavs_ready){
+        Eland_controller_follower_to_leader_.data = true;
+        try {
+          Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
+        }
+        catch (...) {
+          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
+        }
+        ROS_WARN("[Se3CopyController] Triggering Eland (1)");
+        return mrs_msgs::AttitudeCommand::ConstPtr();
+      }
+      else{
+        ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: Eland_controller_follower_to_leader_ = false");
+        Eland_controller_follower_to_leader_.data = false;
+        try {
+          Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
+        }
+        catch (...) {
+          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
+        }
+      }
+    }
+  }
+
+
 
   // Op - position in global frame
   // Ov - velocity in global frame
@@ -1852,6 +2001,19 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
     ROS_ERROR("[Se3CopyController]: Something is wrong with the encoder msg as payload_spawned_ = false and therefor the encoder and the anchoring point data are NOT globally updated or published.");
   }
 }
+
+// | ----------------- 2UAVs safety communication --------------|
+
+void Se3CopyController::ElandLeaderToFollowerCallback(const mrs_msgs::BoolStamped& msg){
+  Eland_controller_leader_to_follower_ = msg;
+  Eland_controller_leader_to_follower_.stamp = ros::Time::now();
+}
+
+void Se3CopyController::ElandFollowerToLeaderCallback(const mrs_msgs::BoolStamped& msg){
+  Eland_controller_follower_to_leader_ = msg;
+  Eland_controller_follower_to_leader_.stamp = ros::Time::now();
+}
+
 // | ------------------------------------------------------------------- | 
 
 
