@@ -80,3 +80,8 @@ payload:
   Epl_max:
     failsafe_enabled: true
     scaling: 1.0 # choose between 0.0 - 1.0
+
+two_uavs_payload:
+  callback_data_max_time_delay:
+    follower: 0.50 # = 10*_dt_0_
+    leader: 0.100 # = 20*_dt_0_

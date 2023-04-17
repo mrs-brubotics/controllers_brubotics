@@ -384,6 +384,8 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("payload/Epl_min", _Epl_min_);
   param_loader.loadParam("payload/Epl_max/failsafe_enabled", _Epl_max_failsafe_enabled_);
   param_loader.loadParam("payload/Epl_max/scaling", _Epl_max_scaling_);
+  param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
+  param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
   
   
   if (!param_loader.loadedSuccessfully()) {
@@ -392,18 +394,6 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   }
   else{
     ROS_INFO("[Se3CopyController]: correctly loaded all Se3CopyController parameters!");
-  }
-
-  mrs_lib::ParamLoader param_loader2(nh2_, "DergbryanTracker");
-  param_loader2.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
-  param_loader2.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
-
-  if (!param_loader2.loadedSuccessfully()) {
-    ROS_ERROR("[Se3CopyController]: could not load all DergbryanTracker parameters!");
-    ros::requestShutdown();
-  } 
-  else{
-    ROS_INFO("[Se3CopyController]: correctly loaded all DergbryanTracker parameters!");
   }
 
   // | ------------------- create publishers ------------------- |
