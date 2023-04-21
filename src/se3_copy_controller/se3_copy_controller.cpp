@@ -193,12 +193,9 @@ private:
   bool both_uavs_ready = false;
 
   // communication Eland all UAVs
-  ros::Subscriber Eland_all_uavs_leader_sub_;
-  void Eland_all_uavs_leader_callback(const std_msgs::Bool& msg);
-  std_msgs::Bool Eland_all_uavs_leader_;
-  ros::Subscriber Eland_all_uavs_follower_sub_;
-  void Eland_all_uavs_follower_callback(const std_msgs::Bool& msg);
-  std_msgs::Bool Eland_all_uavs_follower_;
+  ros::Subscriber Eland_tracker_to_controller_sub_;
+  void Eland_tracker_to_controller_callback(const std_msgs::Bool& msg);
+  std_msgs::Bool Eland_tracker_to_controller_;
 
   // | ------------------------ integrals ----------------------- |
   Eigen::Vector2d Ib_b_;  // body error integral in the body frame
@@ -262,6 +259,9 @@ private:
   // geometry_msgs::Vector3 average_drone_pose;
   // Eigen::Vector3d rel_load_pose_position = Eigen::Vector3d::Zero(3);
   // Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
+
+  // debug:
+  double ROS_INFO_THROTTLE_PERIOD = 0.1;
 };
 
 // --------------------------------------------------------------
@@ -455,13 +455,11 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   if(_type_of_system_=="2uavs_payload"){
     if (_uav_name_ == _leader_uav_name_){  // leader
       Eland_controller_follower_to_leader_sub_ = nh_.subscribe("/"+_follower_uav_name_+"/control_manager/se3_copy_controller/Eland_contr_f_to_l", 1, &Se3CopyController::ElandFollowerToLeaderCallback, this, ros::TransportHints().tcpNoDelay());
-      Eland_all_uavs_leader_sub_ = nh2_.subscribe("/"+_leader_uav_name_+"/control_manager/dergbryan_tracker/Eland_all_uavs", 1, &Se3CopyController::Eland_all_uavs_leader_callback, this, ros::TransportHints().tcpNoDelay());
-      Eland_all_uavs_follower_sub_ = nh2_.subscribe("/"+_follower_uav_name_+"/control_manager/dergbryan_tracker/Eland_all_uavs", 1, &Se3CopyController::Eland_all_uavs_follower_callback, this, ros::TransportHints().tcpNoDelay());
+      Eland_tracker_to_controller_sub_ = nh2_.subscribe("/"+_leader_uav_name_+"/control_manager/dergbryan_tracker/Eland_tracker_to_controller", 1, &Se3CopyController::Eland_tracker_to_controller_callback, this, ros::TransportHints().tcpNoDelay());
     }
     else if(_uav_name_ == _follower_uav_name_){
       Eland_controller_leader_to_follower_sub_ = nh_.subscribe("/"+_leader_uav_name_+"/control_manager/se3_copy_controller/Eland_contr_l_to_f", 1, &Se3CopyController::ElandLeaderToFollowerCallback, this, ros::TransportHints().tcpNoDelay());
-      Eland_all_uavs_leader_sub_ = nh2_.subscribe("/"+_leader_uav_name_+"/control_manager/dergbryan_tracker/Eland_all_uavs", 1, &Se3CopyController::Eland_all_uavs_leader_callback, this, ros::TransportHints().tcpNoDelay());
-      Eland_all_uavs_follower_sub_ = nh2_.subscribe("/"+_follower_uav_name_+"/control_manager/dergbryan_tracker/Eland_all_uavs", 1, &Se3CopyController::Eland_all_uavs_follower_callback, this, ros::TransportHints().tcpNoDelay());
+      Eland_tracker_to_controller_sub_ = nh2_.subscribe("/"+_follower_uav_name_+"/control_manager/dergbryan_tracker/Eland_tracker_to_controller", 1, &Se3CopyController::Eland_tracker_to_controller_callback, this, ros::TransportHints().tcpNoDelay());
     }  
   }
 
@@ -584,7 +582,8 @@ void Se3CopyController::deactivate(void) {
 
 const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_msgs::UavState::ConstPtr&        uav_state,
                                                                 const mrs_msgs::PositionCommand::ConstPtr& control_reference) {
-  
+                                                                  
+  // ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: Start of update()");
   mrs_lib::Routine profiler_routine = profiler_.createRoutine("update");
   mrs_lib::ScopeTimer timer = mrs_lib::ScopeTimer("Se3CopyController::update", common_handlers_->scope_timer.logger, common_handlers_->scope_timer.enabled);
 
@@ -601,90 +600,88 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", uav_state_publisher_.getTopic().c_str());
   }
 
+  // if(payload_spawned_ && _uav_name_==_leader_uav_name_){
+  //   if(ros::Time::now().toSec()>60){
+  //      return mrs_msgs::AttitudeCommand::ConstPtr();
+  //   }
+  // }
 
   // | ----------------- 2UAVs safety communication --------------|
   if(_type_of_system_=="2uavs_payload" && payload_spawned_){
-    ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: Starting 2UAVs safety communication");
+    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Starting 2UAVs safety communication");
+    bool Eland = false;
+    if(Eland_tracker_to_controller_.data){
+      Eland = true;
+    }
     if(_uav_name_==_leader_uav_name_){
-      ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: leader");
-      if(Eland_all_uavs_leader_.data){
-        ROS_WARN("[Se3CopyController]: triggering Eland (3) (sent by leader)");
-        return mrs_msgs::AttitudeCommand::ConstPtr();
-      }
-
-      if(Eland_all_uavs_follower_.data){
-        ROS_WARN("[Se3CopyController]: triggering Eland (3) (sent by follower)");
-        return mrs_msgs::AttitudeCommand::ConstPtr();
-      }
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: leader");
       if(Eland_controller_follower_to_leader_.data){
-        ROS_WARN("[Se3CopyController]: Triggering Eland (2)");
-        return mrs_msgs::AttitudeCommand::ConstPtr();
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
+        Eland = true;
       }
+      if(!is_active_ || Eland){
+        Eland_controller_leader_to_follower_.data = true;
+      }
+      else{
+        Eland_controller_leader_to_follower_.data = false;
+      }
+      
       time_delay_Eland_controller_follower_to_leader_out_.data = (ros::Time::now() - Eland_controller_follower_to_leader_.stamp).toSec();
-      ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
-
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
+      if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_on_callback_data_follower_ && !both_uavs_ready){
+        ROS_INFO_STREAM("[Se3CopyController]: both_uavs_ready");
+        both_uavs_ready = true;
+      }
+      if(time_delay_Eland_controller_follower_to_leader_out_.data > 2*_max_time_delay_on_callback_data_follower_ && both_uavs_ready){
+        Eland_controller_leader_to_follower_.data = true;
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
+        Eland = true;
+      }
+      
+      try {
+        Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
+      }
+      catch (...) {
+        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
+      }
       try {
         time_delay_Eland_controller_follower_to_leader_pub_.publish(time_delay_Eland_controller_follower_to_leader_out_);
       }
       catch (...) {
         ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", time_delay_Eland_controller_follower_to_leader_pub_.getTopic().c_str());
       }
+    }
+    else if(_uav_name_==_follower_uav_name_){
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: follower");
+      if(Eland_controller_leader_to_follower_.data){
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
+        Eland = true;
+      }
+      if(!is_active_ || Eland){
+        Eland_controller_follower_to_leader_.data = true;
+      }
+      else{
+        Eland_controller_follower_to_leader_.data = false;
+      }
 
-      if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_on_callback_data_follower_ && !both_uavs_ready){
+      time_delay_Eland_controller_leader_to_follower_out_.data = (ros::Time::now() - Eland_controller_leader_to_follower_.stamp).toSec();
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
+      if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_on_callback_data_leader_ && !both_uavs_ready){
         ROS_INFO_STREAM("[Se3CopyController]: both_uavs_ready");
         both_uavs_ready = true;
       }
-
-      if(time_delay_Eland_controller_follower_to_leader_out_.data > 2*_max_time_delay_on_callback_data_follower_ && both_uavs_ready){
-        Eland_controller_leader_to_follower_.data = true;
-        try {
-          Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
-        }
-        catch (...) {
-          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
-        }
-        ROS_WARN("[Se3CopyController]: Triggering Eland (1)");
-        return mrs_msgs::AttitudeCommand::ConstPtr();
-      }
-      // else if(ros::Time::now().toSec() > 60){ // To test Eland type 2
-      //   Eland_controller_leader_to_follower_.data = true;
-      //   ROS_WARN("[Se3CopyController]: Triggering Eland on leader to test Eland type 2 on follower");
-      //   try {
-      //     Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
-      //   }
-      //   catch (...) {
-      //     ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
-      //   }
-      //   return mrs_msgs::AttitudeCommand::ConstPtr();
-      // }
-      else{
-        ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: Eland_controller_leader_to_follower = false");
-        Eland_controller_leader_to_follower_.data = false;
-        try {
-          Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
-        }
-        catch (...) {
-          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
-        }
-      }
-    }
-    else if(_uav_name_==_follower_uav_name_){
-      ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: follower");
-      if(Eland_all_uavs_leader_.data){
-        ROS_WARN("[Se3CopyController]: Follower triggering Eland (3) (sent by leader)");
-        return mrs_msgs::AttitudeCommand::ConstPtr();
+      if(time_delay_Eland_controller_leader_to_follower_out_.data > 2*_max_time_delay_on_callback_data_leader_ && both_uavs_ready){
+        Eland_controller_follower_to_leader_.data = true;
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
+        Eland = true;
       }
 
-      if(Eland_all_uavs_follower_.data){
-        ROS_WARN("[Se3CopyController]: Follower triggering Eland (3) (sent by follower)");
-        return mrs_msgs::AttitudeCommand::ConstPtr();
+      try {
+        Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
       }
-      if(Eland_controller_leader_to_follower_.data){
-        ROS_WARN("[Se3CopyController]: Triggering Eland (2)");
-        return mrs_msgs::AttitudeCommand::ConstPtr();
+      catch (...) {
+        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
       }
-      time_delay_Eland_controller_leader_to_follower_out_.data = (ros::Time::now() - Eland_controller_leader_to_follower_.stamp).toSec();
-      ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
       try {
         time_delay_Eland_controller_leader_to_follower_pub_.publish(time_delay_Eland_controller_leader_to_follower_out_);
       }
@@ -692,57 +689,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", time_delay_Eland_controller_leader_to_follower_pub_.getTopic().c_str());
       }
 
-      if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_on_callback_data_leader_ && !both_uavs_ready){
-        ROS_INFO_STREAM("[Se3CopyController]: both_uavs_ready");
-        both_uavs_ready = true;
-      }
-
-      if(time_delay_Eland_controller_leader_to_follower_out_.data > 2*_max_time_delay_on_callback_data_leader_ && both_uavs_ready){
-        Eland_controller_follower_to_leader_.data = true;
-        try {
-          Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
-        }
-        catch (...) {
-          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
-        }
-        ROS_WARN("[Se3CopyController] Triggering Eland (1)");
-        return mrs_msgs::AttitudeCommand::ConstPtr();
-      }
-      // else if(ros::Time::now().toSec() > 60){ // To test Eland type 2
-      //   Eland_controller_follower_to_leader_.data = true;
-      //   ROS_WARN("[Se3CopyController]: Triggering Eland on follower to test Eland type 2 on leader");
-      //   try {
-      //     Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
-      //   }
-      //   catch (...) {
-      //     ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
-      //   }
-      //   return mrs_msgs::AttitudeCommand::ConstPtr();
-      // }
-      else{
-        ROS_INFO_THROTTLE(0.1,"[Se3CopyController]: Eland_controller_follower_to_leader_ = false");
-        Eland_controller_follower_to_leader_.data = false;
-
-        // if(ros::Time::now().toSec() < 60){ // To test trigger Eland (1) on leader that will trigger Eland (2) on follower (comment below)
-        //   try {
-        //     Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
-        //   }
-        //   catch (...) {
-        //     ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
-        //   }
-        // }
-
-        try { // Comment this if you want to test trigger Eland (1) on leader that will trigger Eland (2) on follower and uncomment above part
-          Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
-        }
-        catch (...) {
-          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
-        }
-      }
+    }
+    if(Eland && is_active_){
+      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Returning empty command to trigger Eland");
+      return mrs_msgs::AttitudeCommand::ConstPtr();
     }
   }
 
-
+  if (!is_active_) {
+    return mrs_msgs::AttitudeCommand::ConstPtr();
+  }
 
   // Op - position in global frame
   // Ov - velocity in global frame
@@ -766,10 +722,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   // DRS:
   auto drs_params = mrs_lib::get_mutexed(mutex_drs_params_, drs_params_);
-
-  if (!is_active_) {
-    return mrs_msgs::AttitudeCommand::ConstPtr();
-  }
   
   // | -------------------- calculate the dt -------------------- |
 
@@ -923,7 +875,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
     // Ignore small load position errors to deal with small, but non-zero load offsets in steady-state and prevent aggressive actions on small errors 
     if(Epl.norm() < _Epl_min_){ // When the payload is very close to equilibrium vertical position, the error is desactivated so the UAV doesn't try to compensate and let it damp naturally.
-      ROS_INFO_THROTTLE(1.0,"[Se3CopyController]: Control error of the anchoring point Epl = %.02fm < _Epl_min_ = %.02fm, hence it has been set to zero", Epl.norm(), _Epl_min_);
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Control error of the anchoring point Epl = %.02fm < _Epl_min_ = %.02fm, hence it has been set to zero", Epl.norm(), _Epl_min_);
       Epl = Eigen::Vector3d::Zero(3);
     }
   }
@@ -1730,7 +1682,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
       output_command->thrust = rampup_thrust_;
 
-      ROS_INFO_THROTTLE(0.1, "[Se3CopyController]: ramping up thrust, %.4f", output_command->thrust);
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: ramping up thrust, %.4f", output_command->thrust);
     }
 
   } else {
@@ -2068,13 +2020,10 @@ void Se3CopyController::ElandFollowerToLeaderCallback(const mrs_msgs::BoolStampe
   Eland_controller_follower_to_leader_.stamp = ros::Time::now();
 }
 
-void Se3CopyController::Eland_all_uavs_leader_callback(const std_msgs::Bool& msg){
-  Eland_all_uavs_leader_ = msg;
+void Se3CopyController::Eland_tracker_to_controller_callback(const std_msgs::Bool& msg){
+  Eland_tracker_to_controller_ = msg;
 }
 
-void Se3CopyController::Eland_all_uavs_follower_callback(const std_msgs::Bool& msg){
-  Eland_all_uavs_follower_ = msg;
-}
 
 // | ------------------------------------------------------------------- | 
 
