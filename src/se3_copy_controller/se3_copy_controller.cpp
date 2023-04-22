@@ -607,6 +607,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   //   }
   // }
 
+  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: is_active = %f",is_active);
+
+
   // | ----------------- paylaod safety check --------------|
   if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){
     if(payload_spawned_){
@@ -623,6 +626,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Starting 2UAVs safety communication");
     bool Eland = false;
     if(Eland_tracker_to_controller_.data){
+      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (tracker)");
       Eland = true;
     }
     if(_uav_name_==_leader_uav_name_){
@@ -630,12 +634,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       if(Eland_controller_follower_to_leader_.data){
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
         Eland = true;
-      }
-      if(!is_active_ || Eland){
-        Eland_controller_leader_to_follower_.data = true;
-      }
-      else{
-        Eland_controller_leader_to_follower_.data = false;
       }
       
       time_delay_Eland_controller_follower_to_leader_out_.data = (ros::Time::now() - Eland_controller_follower_to_leader_.stamp).toSec();
@@ -645,9 +643,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         both_uavs_ready = true;
       }
       if(time_delay_Eland_controller_follower_to_leader_out_.data > 2*_max_time_delay_on_callback_data_follower_ && both_uavs_ready){
-        Eland_controller_leader_to_follower_.data = true;
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
         Eland = true;
+      }
+
+      if(!is_active_ || Eland){
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Continue Eland");
+        Eland_controller_leader_to_follower_.data = true;
+      }
+      else{
+        Eland_controller_leader_to_follower_.data = false;
       }
       
       try {
@@ -669,12 +674,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
         Eland = true;
       }
-      if(!is_active_ || Eland){
-        Eland_controller_follower_to_leader_.data = true;
-      }
-      else{
-        Eland_controller_follower_to_leader_.data = false;
-      }
 
       time_delay_Eland_controller_leader_to_follower_out_.data = (ros::Time::now() - Eland_controller_leader_to_follower_.stamp).toSec();
       ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
@@ -683,9 +682,15 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         both_uavs_ready = true;
       }
       if(time_delay_Eland_controller_leader_to_follower_out_.data > 2*_max_time_delay_on_callback_data_leader_ && both_uavs_ready){
-        Eland_controller_follower_to_leader_.data = true;
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
         Eland = true;
+      }
+
+      if(!is_active_ || Eland){
+        Eland_controller_follower_to_leader_.data = true;
+      }
+      else{
+        Eland_controller_follower_to_leader_.data = false;
       }
 
       try {
