@@ -79,7 +79,8 @@ payload:
   Epl_min: 0.05 # [m], below this payload error norm, the payload error is disabled
   Epl_max:
     failsafe_enabled: true
-    scaling: 1.0 # choose between 0.0 - 1.0
+    scaling_controller: 0.707 # choose between 0.0 - 1.0 (max 60° swing angle)
+    scaling_tracker: 1.0 # choose between 0.0 - 1.0 (max 90° swing angle in predictions)
 
 two_uavs_payload:
   callback_data_max_time_delay:

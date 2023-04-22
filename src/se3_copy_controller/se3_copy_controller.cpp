@@ -134,7 +134,7 @@ private:
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
   double _Epl_min_; // [m], below this payload error norm, the payload error is disabled
   bool _Epl_max_failsafe_enabled_;
-  double _Epl_max_scaling_; // [m]
+  double _Epl_max_scaling_controller_; // [m]
   // ---------------
   // ROS Publishers:
   // ---------------
@@ -172,6 +172,7 @@ private:
   ros::Subscriber load_state_sub_; //Subscriber used to find the state of the payload, from Gazebo (during simulations only).
   void GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesConstPtr& loadmsg); // TODO: bryan think how we can make library to use these function in both controller and tracker if exactly same
   bool payload_spawned_ = false; // inititally not spawned
+  double time_last_payload_message = 0;
   ros::Subscriber data_payload_sub_;  //Subscriber used to get the state of the payload, from Arduino data/baca protocol. (during hardware testing only)
   void BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConstPtr& msg); // TODO: bryan think how we can make library to use these function in both controller and tracker if exactly same
   float encoder_angle_1_; //Angles returned by Arduino/Encoders via Bacaprotocol
@@ -383,7 +384,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   // payload:
   param_loader.loadParam("payload/Epl_min", _Epl_min_);
   param_loader.loadParam("payload/Epl_max/failsafe_enabled", _Epl_max_failsafe_enabled_);
-  param_loader.loadParam("payload/Epl_max/scaling", _Epl_max_scaling_);
+  param_loader.loadParam("payload/Epl_max/scaling_controller", _Epl_max_scaling_controller_);
   param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
   param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
   
@@ -605,6 +606,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   //      return mrs_msgs::AttitudeCommand::ConstPtr();
   //   }
   // }
+
+  // | ----------------- paylaod safety check --------------|
+  if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){
+    if(payload_spawned_){
+      // ROS_INFO_STREAM("time baca"<< ros::Time::now().toSec()-time_last_payload_message);
+      if(ros::Time::now().toSec()-time_last_payload_message>0.1){
+        ROS_WARN("[Se3CopyController]: time since last baca message is bigger than 0.1 seconds. Problem with the BACA protocol => trigger eland");
+        return mrs_msgs::AttitudeCommand::ConstPtr();
+      }
+    }
+  }
 
   // | ----------------- 2UAVs safety communication --------------|
   if(_type_of_system_=="2uavs_payload" && payload_spawned_){
@@ -866,8 +878,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
     
     // Sanity + safety checks: 
-    if (Epl.norm()> _Epl_max_scaling_*_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
-      ROS_ERROR("[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_*_cable_length_*sqrt(2));
+    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Epl = %.02fm and Epl_max = %.02f", Epl.norm(),_Epl_max_scaling_controller_*_cable_length_*sqrt(2));
+    if (Epl.norm()> _Epl_max_scaling_controller_*_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
+      ROS_ERROR("[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_controller_*_cable_length_*sqrt(2));
       // Epl = Eigen::Vector3d::Zero(3);
       if (_Epl_max_failsafe_enabled_){
         return mrs_msgs::AttitudeCommand::ConstPtr(); // trigger eland
@@ -1839,6 +1852,10 @@ void Se3CopyController::GazeboLoadStatesCallback(const gazebo_msgs::LinkStatesCo
           }
         }
       }
+
+      if(payload_spawned_){
+        time_last_payload_message = ros::Time::now().toSec();
+      }
     }
     // Extract the value from the received loadmsg. 
     anchoring_pt_pose_= loadmsg->pose[anchoring_pt_index]; // Now that we know which index refers to the anchoring point we search for (depending on which system we have), we can use it to get the actual state of this point.  
@@ -1936,6 +1953,8 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
   }
 
   if (payload_spawned_) {
+    time_last_payload_message = ros::Time::now().toSec();
+
     Eigen::Vector3d anchoring_pt_pose_position_rel ; // position of the payload in the body frame B
     Eigen::Vector3d anchoring_pt_lin_vel_rel; //Velocity of the payload in the body frame B.
 
