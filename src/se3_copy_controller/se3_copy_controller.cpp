@@ -610,7 +610,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   //   }
   // }
 
-  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: is_active = %d",is_active_);
+  // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: is_active = %d",is_active_);
 
 
   // | ----------------- paylaod safety check --------------|
@@ -651,7 +651,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       }
 
       if(deactivated_ || Eland){
-        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Continue Eland");
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending Eland to follower");
         Eland_controller_leader_to_follower_.data = true;
       }
       else{
@@ -690,6 +690,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       }
 
       if(deactivated_ || Eland){
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending Eland to leader");
         Eland_controller_follower_to_leader_.data = true;
       }
       else{
@@ -886,7 +887,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
     
     // Sanity + safety checks: 
-    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Epl = %.02fm and Epl_max = %.02f", Epl.norm(),_Epl_max_scaling_controller_*_cable_length_*sqrt(2));
+    // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Epl = %.02fm and Epl_max = %.02f", Epl.norm(),_Epl_max_scaling_controller_*_cable_length_*sqrt(2));
     if (Epl.norm()> _Epl_max_scaling_controller_*_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
       ROS_ERROR("[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_controller_*_cable_length_*sqrt(2));
       // Epl = Eigen::Vector3d::Zero(3);
