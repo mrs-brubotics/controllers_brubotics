@@ -613,16 +613,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: is_active = %d",is_active_);
 
 
-  // | ----------------- paylaod safety check --------------|
-  if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){
-    if(payload_spawned_){
-      // ROS_INFO_STREAM("time baca"<< ros::Time::now().toSec()-time_last_payload_message);
-      if(ros::Time::now().toSec()-time_last_payload_message>0.1){
-        ROS_WARN("[Se3CopyController]: time since last baca message is bigger than 0.1 seconds. Problem with the BACA protocol => trigger eland");
-        return mrs_msgs::AttitudeCommand::ConstPtr();
-      }
-    }
-  }
 
   // | ----------------- 2UAVs safety communication --------------|
   if(_type_of_system_=="2uavs_payload" && payload_spawned_){
@@ -714,6 +704,17 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     if(Eland && is_active_){
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Returning empty command to trigger Eland");
       return mrs_msgs::AttitudeCommand::ConstPtr();
+    }
+  }
+
+  // | ----------------- paylaod safety check --------------|
+  if(_type_of_system_=="1uav_payload" || _type_of_system_=="2uavs_payload"){
+    if(payload_spawned_){
+      // ROS_INFO_STREAM("time baca"<< ros::Time::now().toSec()-time_last_payload_message);
+      if(ros::Time::now().toSec()-time_last_payload_message>0.1){
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time since last baca message is bigger than 0.1 seconds. Problem with the BACA protocol => trigger eland");
+        return mrs_msgs::AttitudeCommand::ConstPtr();
+      }
     }
   }
 
