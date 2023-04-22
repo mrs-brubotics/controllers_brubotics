@@ -191,7 +191,8 @@ private:
   std_msgs::Float64 time_delay_Eland_controller_follower_to_leader_out_;
   double _max_time_delay_on_callback_data_follower_;
   double _max_time_delay_on_callback_data_leader_;
-  bool both_uavs_ready = false;
+  bool both_uavs_ready_ = false;
+  bool deactivated_ = false;
 
   // communication Eland all UAVs
   ros::Subscriber Eland_tracker_to_controller_sub_;
@@ -575,6 +576,8 @@ void Se3CopyController::deactivate(void) {
   first_iteration_     = false;
   uav_mass_difference_ = 0;
 
+  deactivated_ = true;
+
   ROS_INFO("[Se3CopyController]: deactivated");
 }
 
@@ -607,7 +610,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   //   }
   // }
 
-  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: is_active = %f",is_active);
+  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: is_active = %d",is_active_);
 
 
   // | ----------------- paylaod safety check --------------|
@@ -638,16 +641,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       
       time_delay_Eland_controller_follower_to_leader_out_.data = (ros::Time::now() - Eland_controller_follower_to_leader_.stamp).toSec();
       ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
-      if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_on_callback_data_follower_ && !both_uavs_ready){
+      if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_on_callback_data_follower_ && !both_uavs_ready_){
         ROS_INFO_STREAM("[Se3CopyController]: both_uavs_ready");
-        both_uavs_ready = true;
+        both_uavs_ready_ = true;
       }
-      if(time_delay_Eland_controller_follower_to_leader_out_.data > 2*_max_time_delay_on_callback_data_follower_ && both_uavs_ready){
+      if(time_delay_Eland_controller_follower_to_leader_out_.data > 2*_max_time_delay_on_callback_data_follower_ && both_uavs_ready_){
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
         Eland = true;
       }
 
-      if(!is_active_ || Eland){
+      if(deactivated_ || Eland){
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Continue Eland");
         Eland_controller_leader_to_follower_.data = true;
       }
@@ -677,16 +680,16 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
       time_delay_Eland_controller_leader_to_follower_out_.data = (ros::Time::now() - Eland_controller_leader_to_follower_.stamp).toSec();
       ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
-      if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_on_callback_data_leader_ && !both_uavs_ready){
+      if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_on_callback_data_leader_ && !both_uavs_ready_){
         ROS_INFO_STREAM("[Se3CopyController]: both_uavs_ready");
-        both_uavs_ready = true;
+        both_uavs_ready_ = true;
       }
-      if(time_delay_Eland_controller_leader_to_follower_out_.data > 2*_max_time_delay_on_callback_data_leader_ && both_uavs_ready){
+      if(time_delay_Eland_controller_leader_to_follower_out_.data > 2*_max_time_delay_on_callback_data_leader_ && both_uavs_ready_){
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
         Eland = true;
       }
 
-      if(!is_active_ || Eland){
+      if(deactivated_ || Eland){
         Eland_controller_follower_to_leader_.data = true;
       }
       else{
