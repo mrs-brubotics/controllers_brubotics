@@ -904,7 +904,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
     
     // Sanity + safety checks: 
-    // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Epl = %.02fm and Epl_max = %.02f", Epl.norm(),_Epl_max_scaling_controller_*_cable_length_*sqrt(2));
+    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Epl = %.02fm and Epl_max = %.02f", Epl.norm(),_Epl_max_scaling_controller_*_cable_length_*sqrt(2));
     if (Epl.norm()> _Epl_max_scaling_controller_*_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
       ROS_ERROR("[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_controller_*_cable_length_*sqrt(2));
       // Epl = Eigen::Vector3d::Zero(3);
