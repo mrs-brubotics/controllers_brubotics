@@ -76,6 +76,11 @@ private:
   double _cable_length_offset_; // accounts for the fact that the cable is attached below the UAV's COM
   double _load_mass_;             // feedforward load mass per uav defined in the session.yaml of every test file (session variable also used by the xacro for Gazebo simulation)
   bool _baca_in_simulation_=false;// Used to validate the encoder angles, and the FK without having to make the UAV fly. Gains related to payload must be set on 0 to perform this. Set on false by default.
+  //emulate nimbro
+  bool emulate_nimbro_ = false;
+  double emulate_nimbro_delay_;
+  double emulate_nimbro_time_ = 0;
+
 
   // | ------------------- declaring .yaml parameters (and some related vars & funs) ------------------- |
   // Se3CopyController:
@@ -134,7 +139,7 @@ private:
   std::mutex mutex_drs_params_;  // locks the gains that came from the drs
   double _Epl_min_; // [m], below this payload error norm, the payload error is disabled
   bool _Epl_max_failsafe_enabled_;
-  double _Epl_max_scaling_controller_; // [m]
+  double _Epl_max_scaling_; // [m]
   // ---------------
   // ROS Publishers:
   // ---------------
@@ -387,10 +392,12 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   // payload:
   param_loader.loadParam("payload/Epl_min", _Epl_min_);
   param_loader.loadParam("payload/Epl_max/failsafe_enabled", _Epl_max_failsafe_enabled_);
-  param_loader.loadParam("payload/Epl_max/scaling_controller", _Epl_max_scaling_controller_);
+  param_loader.loadParam("payload/Epl_max/scaling", _Epl_max_scaling_);
   param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
   param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
-  
+  param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro", emulate_nimbro_);
+  param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro_delay", emulate_nimbro_delay_);
+ 
   
   if (!param_loader.loadedSuccessfully()) {
     ROS_ERROR("[Se3CopyController]: could not load all parameters!");
@@ -616,7 +623,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: is_active = %d",is_active_);
 
-
+  if(emulate_nimbro_){
+    emulate_nimbro_time_ = emulate_nimbro_time_ + dt_;
+    if(emulate_nimbro_time_>emulate_nimbro_delay_){
+      emulate_nimbro_time_ = 0;
+    }
+  }
 
   // | ----------------- 2UAVs safety communication --------------|
   if(_type_of_system_=="2uavs_payload" && payload_spawned_){
@@ -652,11 +664,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         Eland_controller_leader_to_follower_.data = false;
       }
       
-      try {
-        Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
-      }
-      catch (...) {
-        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
+      if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
+        try {
+          Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
+        }
+        catch (...) {
+          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
+        }
       }
       try {
         Eland_controller_follower_at_leader_pub_.publish(Eland_controller_follower_to_leader_);
@@ -697,11 +711,13 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         Eland_controller_follower_to_leader_.data = false;
       }
 
-      try {
-        Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
-      }
-      catch (...) {
-        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
+      if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
+        try {
+          Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
+        }
+        catch (...) {
+          ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
+        }
       }
       try {
         Eland_controller_leader_at_follower_pub_.publish(Eland_controller_leader_to_follower_);
@@ -904,9 +920,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
     
     // Sanity + safety checks: 
-    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Epl = %.02fm and Epl_max = %.02f", Epl.norm(),_Epl_max_scaling_controller_*_cable_length_*sqrt(2));
-    if (Epl.norm()> _Epl_max_scaling_controller_*_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
-      ROS_ERROR("[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_controller_*_cable_length_*sqrt(2));
+    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Epl = %.02fm and Epl_max = %.02f", Epl.norm(),_Epl_max_scaling_*_cable_length_*sqrt(2));
+    if (Epl.norm()> _Epl_max_scaling_*_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
+      ROS_ERROR("[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_*_cable_length_*sqrt(2));
       // Epl = Eigen::Vector3d::Zero(3);
       if (_Epl_max_failsafe_enabled_){
         return mrs_msgs::AttitudeCommand::ConstPtr(); // trigger eland

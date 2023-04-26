@@ -79,10 +79,12 @@ payload:
   Epl_min: 0.05 # [m], below this payload error norm, the payload error is disabled
   Epl_max:
     failsafe_enabled: true
-    scaling_controller: 0.707 # choose between 0.0 - 1.0 (max 60° swing angle)
-    scaling_tracker: 1.0 # choose between 0.0 - 1.0 (max 90° swing angle in predictions)
+    scaling: 1.0 # choose between 0.0 - 1.0 (0.707 <-> max 60° swing angle)
 
 two_uavs_payload:
   callback_data_max_time_delay:
     follower: 0.50 # = 10*_dt_0_
     leader: 0.100 # = 20*_dt_0_
+  nimbro:
+    emulate_nimbro: false
+    emulate_nimbro_delay: 0
