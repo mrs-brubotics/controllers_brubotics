@@ -194,10 +194,10 @@ private:
   bool both_uavs_ready_ = false;
   bool deactivated_ = false;
 
-  // communication Eland all UAVs
-  ros::Subscriber Eland_tracker_to_controller_sub_;
-  void Eland_tracker_to_controller_callback(const std_msgs::Bool& msg);
-  std_msgs::Bool Eland_tracker_to_controller_;
+  // // communication Eland all UAVs
+  // ros::Subscriber Eland_tracker_to_controller_sub_;
+  // void Eland_tracker_to_controller_callback(const std_msgs::Bool& msg);
+  // std_msgs::Bool Eland_tracker_to_controller_;
 
   // | ------------------------ integrals ----------------------- |
   Eigen::Vector2d Ib_b_;  // body error integral in the body frame
@@ -457,11 +457,11 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   if(_type_of_system_=="2uavs_payload"){
     if (_uav_name_ == _leader_uav_name_){  // leader
       Eland_controller_follower_to_leader_sub_ = nh_.subscribe("/"+_follower_uav_name_+"/control_manager/se3_copy_controller/Eland_contr_f_to_l", 1, &Se3CopyController::ElandFollowerToLeaderCallback, this, ros::TransportHints().tcpNoDelay());
-      Eland_tracker_to_controller_sub_ = nh2_.subscribe("/"+_leader_uav_name_+"/control_manager/dergbryan_tracker/Eland_tracker_to_controller", 1, &Se3CopyController::Eland_tracker_to_controller_callback, this, ros::TransportHints().tcpNoDelay());
+      // Eland_tracker_to_controller_sub_ = nh2_.subscribe("/"+_leader_uav_name_+"/control_manager/dergbryan_tracker/Eland_tracker_to_controller", 1, &Se3CopyController::Eland_tracker_to_controller_callback, this, ros::TransportHints().tcpNoDelay());
     }
     else if(_uav_name_ == _follower_uav_name_){
       Eland_controller_leader_to_follower_sub_ = nh_.subscribe("/"+_leader_uav_name_+"/control_manager/se3_copy_controller/Eland_contr_l_to_f", 1, &Se3CopyController::ElandLeaderToFollowerCallback, this, ros::TransportHints().tcpNoDelay());
-      Eland_tracker_to_controller_sub_ = nh2_.subscribe("/"+_follower_uav_name_+"/control_manager/dergbryan_tracker/Eland_tracker_to_controller", 1, &Se3CopyController::Eland_tracker_to_controller_callback, this, ros::TransportHints().tcpNoDelay());
+      // Eland_tracker_to_controller_sub_ = nh2_.subscribe("/"+_follower_uav_name_+"/control_manager/dergbryan_tracker/Eland_tracker_to_controller", 1, &Se3CopyController::Eland_tracker_to_controller_callback, this, ros::TransportHints().tcpNoDelay());
     }  
   }
 
@@ -618,10 +618,10 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   if(_type_of_system_=="2uavs_payload" && payload_spawned_){
     ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Starting 2UAVs safety communication");
     bool Eland = false;
-    if(Eland_tracker_to_controller_.data){
-      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (tracker)");
-      Eland = true;
-    }
+    // if(Eland_tracker_to_controller_.data){
+    //   ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (tracker)");
+    //   Eland = true;
+    // }
     if(_uav_name_==_leader_uav_name_){
       ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: leader");
       if(Eland_controller_follower_to_leader_.data){
@@ -2049,9 +2049,9 @@ void Se3CopyController::ElandFollowerToLeaderCallback(const mrs_msgs::BoolStampe
   Eland_controller_follower_to_leader_.stamp = ros::Time::now();
 }
 
-void Se3CopyController::Eland_tracker_to_controller_callback(const std_msgs::Bool& msg){
-  Eland_tracker_to_controller_ = msg;
-}
+// void Se3CopyController::Eland_tracker_to_controller_callback(const std_msgs::Bool& msg){
+//   Eland_tracker_to_controller_ = msg;
+// }
 
 
 // | ------------------------------------------------------------------- | 
