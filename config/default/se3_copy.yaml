@@ -80,6 +80,9 @@ payload:
   Epl_max:
     failsafe_enabled: true
     scaling: 1.0 # choose between 0.0 - 1.0 (0.707 <-> max 60° swing angle)
+  swing_angle:
+    max: 1.05  #[rad]
+    failsafe_enabled: true
 
 two_uavs_payload:
   callback_data_max_time_delay:

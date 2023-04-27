@@ -140,6 +140,8 @@ private:
   double _Epl_min_; // [m], below this payload error norm, the payload error is disabled
   bool _Epl_max_failsafe_enabled_;
   double _Epl_max_scaling_; // [m]
+  bool max_swing_angle_failsafe_enabled_;
+  double max_swing_angle_;
   // ---------------
   // ROS Publishers:
   // ---------------
@@ -393,6 +395,8 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("payload/Epl_min", _Epl_min_);
   param_loader.loadParam("payload/Epl_max/failsafe_enabled", _Epl_max_failsafe_enabled_);
   param_loader.loadParam("payload/Epl_max/scaling", _Epl_max_scaling_);
+  param_loader.loadParam("payload/swing_angle/failsafe_enabled", max_swing_angle_failsafe_enabled_);  
+  param_loader.loadParam("payload/swing_angle/max", max_swing_angle_);
   param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
   param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro", emulate_nimbro_);
@@ -932,6 +936,21 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     if(Epl.norm() < _Epl_min_){ // When the payload is very close to equilibrium vertical position, the error is desactivated so the UAV doesn't try to compensate and let it damp naturally.
       ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Control error of the anchoring point Epl = %.02fm < _Epl_min_ = %.02fm, hence it has been set to zero", Epl.norm(), _Epl_min_);
       Epl = Eigen::Vector3d::Zero(3);
+    }
+
+    // Check max swing angle
+    Eigen::Vector3d uav_position(uav_state->pose.position.x,uav_state->pose.position.y,uav_state->pose.position.z); //get a vector of the UAV position to ease the following computations.
+    Eigen::Vector3d mu; //Unit vector indicating cable orientation.
+    Eigen::Vector3d zB; //unit vector z_B of the UAV body frame
+    mu = (uav_position-Opl).normalized();
+    zB = R.col(2);
+    double swing_angle = acos((mu.dot(zB))/(mu.norm()*zB.norm()));
+    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: swing angle = %f ",swing_angle);
+    if(swing_angle > max_swing_angle_){
+      ROS_ERROR("[Se3CopyController]: Swing angle is larger than allowed (%.02f rad >  %.02f rad).", swing_angle, max_swing_angle_);
+      if (max_swing_angle_failsafe_enabled_){
+        return mrs_msgs::AttitudeCommand::ConstPtr(); // trigger eland
+      }
     }
   }
  
@@ -1743,6 +1762,8 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   } else {
     output_command->thrust = thrust;
   }
+
+  // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: thrust = %f ",thrust);
 
   output_command->ramping_up = rampup_active_;
 
