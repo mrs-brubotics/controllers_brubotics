@@ -79,10 +79,10 @@ payload:
   Epl_min: 0.05 # [m], below this payload error norm, the payload error is disabled
   Epl_max:
     failsafe_enabled: true
-    scaling: 1.0 # choose between 0.0 - 1.0 (0.707 <-> max 60° swing angle)
+    scaling: 1.0 # keep scaling on 1.0. It triggers Eland if payload angles in world frame reach 90° (avoids singularity)
   swing_angle:
-    max: 1.05  #[rad]
     failsafe_enabled: true
+    max: deg(60)  # Eland if max swing angle is reached to avoid hitting the legs of the UAV
 
 two_uavs_payload:
   callback_data_max_time_delay:
