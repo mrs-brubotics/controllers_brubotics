@@ -31,6 +31,8 @@
 #include <std_msgs/Bool.h>
 #include <mrs_msgs/BoolStamped.h>
 
+#include <vector>
+
 //}
 
 #define OUTPUT_ATTITUDE_RATE 0
@@ -169,8 +171,9 @@ private:
   //|-----------------------------2UAVs safety communication--------------------------------|//
   ros::Publisher Eland_controller_leader_to_follower_pub_;
   ros::Publisher Eland_controller_follower_to_leader_pub_;
-  ros::Publisher Eland_controller_leader_at_follower_pub_;
-  ros::Publisher Eland_controller_follower_at_leader_pub_;
+  // ros::Publisher Eland_controller_leader_at_follower_pub_;
+  // ros::Publisher Eland_controller_follower_at_leader_pub_;
+  ros::Publisher ros_delay_pub_;
   ros::Publisher time_delay_Eland_controller_leader_to_follower_pub_;
   ros::Publisher time_delay_Eland_controller_follower_to_leader_pub_;
 
@@ -198,6 +201,8 @@ private:
   void ElandFollowerToLeaderCallback(const mrs_msgs::BoolStamped& msg);
   mrs_msgs::BoolStamped Eland_controller_follower_to_leader_;
   std_msgs::Float64 time_delay_Eland_controller_follower_to_leader_out_;
+  std_msgs::Float64 ros_delay_out_;
+  int n_ros_delay_ = 0;
   double _max_time_delay_on_callback_data_follower_;
   double _max_time_delay_on_callback_data_leader_;
   bool both_uavs_ready_ = false;
@@ -435,15 +440,16 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
 
   // 2UAVs safety communication
   if(_type_of_system_=="2uavs_payload"){
+    ros_delay_pub_ = nh_.advertise<std_msgs::Float64>("ros_delay",1);
     if (_uav_name_ == _leader_uav_name_){  // leader
       Eland_controller_leader_to_follower_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_l_to_f",1);
       time_delay_Eland_controller_follower_to_leader_pub_ = nh_.advertise<std_msgs::Float64>("time_delay_Eland_controller_follower_to_leader",1);
-      Eland_controller_follower_at_leader_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_f_at_l",1);
+      // Eland_controller_follower_at_leader_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_f_at_l",1);
     }
     else if(_uav_name_ == _follower_uav_name_){
       Eland_controller_follower_to_leader_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_f_to_l",1);
       time_delay_Eland_controller_leader_to_follower_pub_ = nh_.advertise<std_msgs::Float64>("time_delay_Eland_controller_leader_to_follower",1);
-      Eland_controller_leader_at_follower_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_l_at_f",1);
+      // Eland_controller_leader_at_follower_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_l_at_f",1);
     }  
   }
 
@@ -670,18 +676,19 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       
       if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
         try {
+          Eland_controller_leader_to_follower_.stamp = ros::Time::now();
           Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
         }
         catch (...) {
           ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
         }
       }
-      try {
-        Eland_controller_follower_at_leader_pub_.publish(Eland_controller_follower_to_leader_);
-      }
-      catch (...) {
-        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_at_leader_pub_.getTopic().c_str());
-      }
+      // try {
+      //   Eland_controller_follower_at_leader_pub_.publish(Eland_controller_follower_to_leader_);
+      // }
+      // catch (...) {
+      //   ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_at_leader_pub_.getTopic().c_str());
+      // }
       try {
         time_delay_Eland_controller_follower_to_leader_pub_.publish(time_delay_Eland_controller_follower_to_leader_out_);
       }
@@ -717,18 +724,19 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
       if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
         try {
+          Eland_controller_follower_to_leader_.stamp = ros::Time::now();
           Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
         }
         catch (...) {
           ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
         }
       }
-      try {
-        Eland_controller_leader_at_follower_pub_.publish(Eland_controller_leader_to_follower_);
-      }
-      catch (...) {
-        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_at_follower_pub_.getTopic().c_str());
-      }
+      // try {
+      //   Eland_controller_leader_at_follower_pub_.publish(Eland_controller_leader_to_follower_);
+      // }
+      // catch (...) {
+      //   ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_at_follower_pub_.getTopic().c_str());
+      // }
       try {
         time_delay_Eland_controller_leader_to_follower_pub_.publish(time_delay_Eland_controller_leader_to_follower_out_);
       }
@@ -2094,11 +2102,33 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
 
 void Se3CopyController::ElandLeaderToFollowerCallback(const mrs_msgs::BoolStamped& msg){
   Eland_controller_leader_to_follower_ = msg;
+  if(n_ros_delay_<10){
+    n_ros_delay_ ++;
+    ros_delay_out_.data = -(ros::Time::now() - Eland_controller_leader_to_follower_.stamp).toSec();
+    ROS_INFO_STREAM("[Se3CopyController]: ros delay at follower = " << ros_delay_out_.data);
+    try {
+      ros_delay_pub_.publish(ros_delay_out_);
+    }
+    catch (...) {
+      ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_delay_pub_.getTopic().c_str());
+    }
+  }
   Eland_controller_leader_to_follower_.stamp = ros::Time::now();
 }
 
 void Se3CopyController::ElandFollowerToLeaderCallback(const mrs_msgs::BoolStamped& msg){
   Eland_controller_follower_to_leader_ = msg;
+  if(n_ros_delay_<10){
+    n_ros_delay_ ++;
+    ros_delay_out_.data = (ros::Time::now() - Eland_controller_follower_to_leader_.stamp).toSec();
+    ROS_INFO_STREAM("[Se3CopyController]: ros delay at leader = " << ros_delay_out_.data);
+    try {
+      ros_delay_pub_.publish(ros_delay_out_);
+    }
+    catch (...) {
+      ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_delay_pub_.getTopic().c_str());
+    }
+  }
   Eland_controller_follower_to_leader_.stamp = ros::Time::now();
 }
 
