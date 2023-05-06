@@ -91,3 +91,5 @@ two_uavs_payload:
   nimbro:
     emulate_nimbro: false
     emulate_nimbro_delay: 0
+
+ros_info_throttle_period: 0.1 # period of prints in the controller and tracker

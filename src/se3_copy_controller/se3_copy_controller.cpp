@@ -277,7 +277,7 @@ private:
   // Eigen::Vector3d Difference_load_drone_position = Eigen::Vector3d::Zero(3);
 
   // debug:
-  double ROS_INFO_THROTTLE_PERIOD = 0.1;
+  double ROS_INFO_THROTTLE_PERIOD; // = 0.1;
 };
 
 // --------------------------------------------------------------
@@ -406,6 +406,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro", emulate_nimbro_);
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro_delay", emulate_nimbro_delay_);
+  param_loader.loadParam("ros_info_throttle_period", ROS_INFO_THROTTLE_PERIOD);
  
   
   if (!param_loader.loadedSuccessfully()) {
