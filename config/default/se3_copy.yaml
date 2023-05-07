@@ -91,5 +91,6 @@ two_uavs_payload:
   nimbro:
     emulate_nimbro: false
     emulate_nimbro_delay: 0
+  connection_delay: 2 # Delay between when UAVs first receive messages and when they Eland if the message delay is too high 
 
 ros_info_throttle_period: 0.1 # period of prints in the controller and tracker
