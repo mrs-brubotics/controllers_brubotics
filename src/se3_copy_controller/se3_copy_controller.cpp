@@ -864,7 +864,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     uav_heading_ = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeading();
   }
   catch (...) {
-    ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: could not calculate the UAV heading");
+    ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: could not calculate the UAV heading");
   }
 
   // --------------------------------------------------------------
@@ -967,9 +967,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
     
     // Sanity + safety checks: 
-    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Epl = %.02fm and Epl_max = %.02f", Epl.norm(),_Epl_max_scaling_*_cable_length_*sqrt(2));
+    // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Epl = %.02fm and Epl_max = %.02f", Epl.norm(),_Epl_max_scaling_*_cable_length_*sqrt(2));
     if (Epl.norm()> _Epl_max_scaling_*_cable_length_*sqrt(2)){ // Largest possible error when cable is oriented 90°.
-      ROS_ERROR("[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_*_cable_length_*sqrt(2));
+      if(_run_type_!="uav"){
+        ROS_ERROR("[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_*_cable_length_*sqrt(2));
+      }
+      else{
+        ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Control error of the anchoring point Epl was larger than expected (%.02fm> _cable_length_*sqrt(2)= %.02fm).", Epl.norm(), _Epl_max_scaling_*_cable_length_*sqrt(2));
+      }
       // Epl = Eigen::Vector3d::Zero(3);
       if (_Epl_max_failsafe_enabled_){
         return mrs_msgs::AttitudeCommand::ConstPtr(); // trigger eland
@@ -988,7 +993,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     mu = (uav_position-Opl).normalized();
     zB = R.col(2);
     double swing_angle = acos((mu.dot(zB))/(mu.norm()*zB.norm()));
-    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: swing angle = %f ",swing_angle);
+    // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: swing angle = %f ",swing_angle);
     if(swing_angle > max_swing_angle_){
       ROS_ERROR("[Se3CopyController]: Swing angle is larger than allowed (%.02f rad >  %.02f rad).", swing_angle, max_swing_angle_);
       if (max_swing_angle_failsafe_enabled_){
@@ -1139,32 +1144,34 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   Kdl = Kdl * total_mass;
 
   // gains after being mutiplied with total_mass
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_x*m = %f", Kp(0));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_y*m = %f", Kp(1));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_z*m = %f", Kp(2));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_x*m = %f", Kv(0));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_y*m = %f", Kv(1));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_z*m = %f", Kv(2));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kpl_x*m = %f", Kpl(0));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kpl_y*m = %f", Kpl(1));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kpl_z*m = %f", Kpl(2));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_x*m = %f", Kdl(0));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_y*m = %f", Kdl(1));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_z*m = %f", Kdl(2));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_x = %f", Kq(0));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_y = %f", Kq(1));
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_z = %f", Kq(2));
+  if(_run_type_!="uav"){ // Only printed in simulation
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_x*m = %f", Kp(0));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_y*m = %f", Kp(1));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kp_z*m = %f", Kp(2));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_x*m = %f", Kv(0));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_y*m = %f", Kv(1));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kv_z*m = %f", Kv(2));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kpl_x*m = %f", Kpl(0));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kpl_y*m = %f", Kpl(1));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kpl_z*m = %f", Kpl(2));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_x*m = %f", Kdl(0));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_y*m = %f", Kdl(1));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kdl_z*m = %f", Kdl(2));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_x = %f", Kq(0));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_y = %f", Kq(1));
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: Kq_z = %f", Kq(2));
 
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: _uav_mass_ = %f", _uav_mass_);
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: uav_mass_difference_ (estimated)= %f", uav_mass_difference_);
-  if(_type_of_system_ == "1uav_payload" || _type_of_system_ == "2uavs_payload" ){
-    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: _load_mass_ = %f", _load_mass_);
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: _uav_mass_ = %f", _uav_mass_);
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: uav_mass_difference_ (estimated)= %f", uav_mass_difference_);
+    if(_type_of_system_ == "1uav_payload" || _type_of_system_ == "2uavs_payload" ){
+      ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: _load_mass_ = %f", _load_mass_);
+    }
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: total_mass (estimated)= %f", total_mass);
+    
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: n_motors = %d", common_handlers_->motor_params.n_motors);
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: motor_params.A = %f", common_handlers_->motor_params.A);
+    ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: motor_params.B = %f", common_handlers_->motor_params.B);
   }
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: total_mass (estimated)= %f", total_mass);
-  
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: n_motors = %d", common_handlers_->motor_params.n_motors);
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: motor_params.A = %f", common_handlers_->motor_params.A);
-  ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: motor_params.B = %f", common_handlers_->motor_params.B);
 
   // | --------------- desired orientation matrix --------------- |
   // get body integral in the world frame
@@ -1187,7 +1194,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       Ib_w[0] = res.value().vector.x;
       Ib_w[1] = res.value().vector.y;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: could not transform the Ib_b_ to the world frame");
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: could not transform the Ib_b_ to the world frame");
     }
   }
 
@@ -1214,7 +1221,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // | ----------- limiting the desired downwards acceleration and maximum tilt angle ---------- |
   // TODO: check with MPC guidage code if this actually makes sense as i remember to have improved it
   if (f[2] < 0) {
-    ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
+    ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: the calculated downwards desired force is negative (%.2f) -> mitigating flip", f[2]);
     f << 0, 0, 1; // ctu original
     // f << f[0], f[1], 0.0; // saturate the z-component on zero such that the desired tilt angle stays in the upper hemisphere
   }
@@ -1234,7 +1241,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   // check for the failsafe limit
   if (!std::isfinite(theta.data)) {
-
     ROS_ERROR("[Se3CopyController]: NaN detected in variable 'theta', returning null");
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
@@ -1244,16 +1250,19 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
     ROS_ERROR("[Se3CopyController]: the produced tilt angle (%.2f deg) would be over the failsafe limit (%.2f deg), returning null", (180.0 / M_PI) * theta.data,
               (180.0 / M_PI) * _tilt_angle_failsafe_);
-    ROS_INFO("[Se3CopyController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
-    ROS_INFO("[Se3CopyController]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
-    ROS_INFO("[Se3CopyController]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
-    ROS_INFO("[Se3CopyController]: load position feedback: [%.2f, %.2f, %.2f]", load_position_feedback[0], load_position_feedback[1], load_position_feedback[2]);
-    ROS_INFO("[Se3CopyController]: load velocity feedback: [%.2f, %.2f, %.2f]", load_velocity_feedback[0], load_velocity_feedback[1], load_velocity_feedback[2]);
-    ROS_INFO("[Se3CopyController]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
-    ROS_INFO("[Se3CopyController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", control_reference->position.x, control_reference->position.y,
-             control_reference->position.z, control_reference->heading);
-    ROS_INFO("[Se3CopyController]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
-             uav_state->pose.position.z, uav_heading_);
+
+    if(_run_type_!="uav"){ // Only print in simulation
+      ROS_INFO("[Se3CopyController]: f = [%.2f, %.2f, %.2f]", f[0], f[1], f[2]);
+      ROS_INFO("[Se3CopyController]: position feedback: [%.2f, %.2f, %.2f]", position_feedback[0], position_feedback[1], position_feedback[2]);
+      ROS_INFO("[Se3CopyController]: velocity feedback: [%.2f, %.2f, %.2f]", velocity_feedback[0], velocity_feedback[1], velocity_feedback[2]);
+      ROS_INFO("[Se3CopyController]: load position feedback: [%.2f, %.2f, %.2f]", load_position_feedback[0], load_position_feedback[1], load_position_feedback[2]);
+      ROS_INFO("[Se3CopyController]: load velocity feedback: [%.2f, %.2f, %.2f]", load_velocity_feedback[0], load_velocity_feedback[1], load_velocity_feedback[2]);
+      ROS_INFO("[Se3CopyController]: integral feedback: [%.2f, %.2f, %.2f]", integral_feedback[0], integral_feedback[1], integral_feedback[2]);
+      ROS_INFO("[Se3CopyController]: position_cmd: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", control_reference->position.x, control_reference->position.y,
+              control_reference->position.z, control_reference->heading);
+      ROS_INFO("[Se3CopyController]: odometry: x: %.2f, y: %.2f, z: %.2f, heading: %.2f", uav_state->pose.position.x, uav_state->pose.position.y,
+              uav_state->pose.position.z, uav_heading_);
+    }
 
     return mrs_msgs::AttitudeCommand::ConstPtr();
   }
@@ -1264,7 +1273,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // ROS_INFO_THROTTLE(15.0,"[Se3CopyController]: constraints.tilt = %f", constraints.tilt);
   // ROS_INFO_STREAM("[Se3CopyController]: theta.data = " << theta.data);
   if (fabs(constraints.tilt) > 1e-3 && theta.data > constraints.tilt) {
-    ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta.data / M_PI) * 180.0,
+    ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: tilt is being saturated, desired: %.2f deg, saturated %.2f deg", (theta.data / M_PI) * 180.0,
                       (constraints.tilt / M_PI) * 180.0);
     theta.data = constraints.tilt;
   }
@@ -1291,7 +1300,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         Rd = mrs_lib::AttitudeConverter(Rd).setHeading(control_reference->heading);
       }
       catch (...) {
-        ROS_ERROR("[Se3CopyController]: could not set the desired heading");
+        if(_run_type_!="uav"){
+          ROS_ERROR("[Se3CopyController]: could not set the desired heading");
+        }
+        else{
+          ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: could not set the desired heading");
+        }
       }
     }
 
@@ -1302,7 +1316,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     if (control_reference->use_heading) {
       bxd << cos(control_reference->heading), sin(control_reference->heading), 0;
     } else {
-      ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: desired heading was not specified, using current heading instead!");
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: desired heading was not specified, using current heading instead!");
       bxd << cos(uav_heading_), sin(uav_heading_), 0;
     }
 
@@ -1401,7 +1415,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     if (thrust_force.data >= 0) {
       thrust = mrs_lib::quadratic_thrust_model::forceToThrust(common_handlers_->motor_params, thrust_force.data);
     } else {
-      ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: just so you know, the desired thrust force is negative (%.2f)", thrust_force.data);
+      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: just so you know, the desired thrust force is negative (%.2f)", thrust_force.data);
     }
   } else {
     // the thrust is overriden from the tracker command
@@ -1410,20 +1424,24 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   // saturate the thrust
   if (!std::isfinite(thrust)) {
-
     thrust = 0;
-    ROS_ERROR("[Se3CopyController]: NaN detected in variable 'thrust', setting it to 0 and returning!!!");
-
+    if(_run_type_!="uav"){
+      ROS_ERROR("[Se3CopyController]: NaN detected in variable 'thrust', setting it to 0 and returning!!!");
+    }
+    else{
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: NaN detected in variable 'thrust', setting it to 0 and returning!!!");
+    }
   } else if (thrust > _thrust_saturation_.data) {
 
     thrust = _thrust_saturation_.data;
-    ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: saturating thrust to %.2f", _thrust_saturation_.data);
+    ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: saturating thrust to %.2f", _thrust_saturation_.data);
 
   } else if (thrust < 0.0) {
 
     thrust = 0.0;
-    ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: saturating thrust to 0");
+    ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: saturating thrust to 0");
   }
+  
 
   // custom publisher
   std_msgs::Float64 thrust_physical_saturated;
@@ -1445,7 +1463,12 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       desired_yaw_rate = mrs_lib::AttitudeConverter(Rd).getYawRateIntrinsic(control_reference->heading_rate);
     }
     catch (...) {
-      ROS_ERROR("[Se3CopyController]: exception caught while calculating the desired_yaw_rate feedforward");
+      if(_run_type_!="uav"){
+        ROS_ERROR("[Se3CopyController]: exception caught while calculating the desired_yaw_rate feedforward");
+      }
+      else{
+        ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: exception caught while calculating the desired_yaw_rate feedforward");
+      }
     }
 
     Rw << 0, 0, desired_yaw_rate;
@@ -1479,14 +1502,24 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       parasitic_heading_rate = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getHeadingRate(q_feedback_yawless);
     }
     catch (...) {
-      ROS_ERROR("[Se3CopyController]: exception caught while calculating the parasitic heading rate!");
+      if(_run_type_!="uav"){
+        ROS_ERROR("[Se3CopyController]: exception caught while calculating the parasitic heading rate!");
+      }
+      else{
+        ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: exception caught while calculating the parasitic heading rate!");
+      }
     }
 
     try {
       rp_heading_rate_compensation(2) = mrs_lib::AttitudeConverter(uav_state->pose.orientation).getYawRateIntrinsic(-parasitic_heading_rate);
     }
     catch (...) {
-      ROS_ERROR("[Se3CopyController]: exception caught while calculating the parasitic heading rate compensation!");
+      if(_run_type_!="uav"){
+        ROS_ERROR("[Se3CopyController]: exception caught while calculating the parasitic heading rate compensation!");
+      }
+      else{
+        ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: exception caught while calculating the parasitic heading rate compensation!");
+      }
     }
   }
 
@@ -1518,7 +1551,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     bool world_integral_saturated = false;
     if (!std::isfinite(Iw_w_[0])) {
       Iw_w_[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!");
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: NaN detected in variable 'Iw_w_[0]', setting it to 0!!!");
     } else if (Iw_w_[0] > kiwxy_lim_) {
       Iw_w_[0]                 = kiwxy_lim_;
       world_integral_saturated = true;
@@ -1528,14 +1561,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
 
     if (kiwxy_lim_ >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: SE3's world X integral is being saturated!");
+      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: SE3's world X integral is being saturated!");
     }
 
     // saturate the world Y
     world_integral_saturated = false;
     if (!std::isfinite(Iw_w_[1])) {
       Iw_w_[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!");
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: NaN detected in variable 'Iw_w_[1]', setting it to 0!!!");
     } else if (Iw_w_[1] > kiwxy_lim_) {
       Iw_w_[1]                 = kiwxy_lim_;
       world_integral_saturated = true;
@@ -1545,7 +1578,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
 
     if (kiwxy_lim_ >= 0 && world_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: SE3's world Y integral is being saturated!");
+      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: SE3's world Y integral is being saturated!");
     }
   }
 
@@ -1580,7 +1613,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         Ep_fcu_untilted[0] = res.value().vector.x;
         Ep_fcu_untilted[1] = res.value().vector.y;
       } else {
-        ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: could not transform the position error to fcu_untilted");
+        ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: could not transform the position error to fcu_untilted");
       }
     }
 
@@ -1600,7 +1633,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         Ev_fcu_untilted[0] = res.value().vector.x;
         Ev_fcu_untilted[1] = res.value().vector.x;
       } else {
-        ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: could not transform the velocity error to fcu_untilted");
+        ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: could not transform the velocity error to fcu_untilted");
       }
     }
 
@@ -1615,7 +1648,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     bool body_integral_saturated = false;
     if (!std::isfinite(Ib_b_[0])) {
       Ib_b_[0] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: NaN detected in variable 'Ib_b_[0]', setting it to 0!!!");
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: NaN detected in variable 'Ib_b_[0]', setting it to 0!!!");
     } else if (Ib_b_[0] > kibxy_lim_) {
       Ib_b_[0]                = kibxy_lim_;
       body_integral_saturated = true;
@@ -1625,14 +1658,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
 
     if (kibxy_lim_ > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: SE3's body pitch integral is being saturated!");
+      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: SE3's body pitch integral is being saturated!");
     }
 
     // saturate the body
     body_integral_saturated = false;
     if (!std::isfinite(Ib_b_[1])) {
       Ib_b_[1] = 0;
-      ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: NaN detected in variable 'Ib_b_[1]', setting it to 0!!!");
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: NaN detected in variable 'Ib_b_[1]', setting it to 0!!!");
     } else if (Ib_b_[1] > kibxy_lim_) {
       Ib_b_[1]                = kibxy_lim_;
       body_integral_saturated = true;
@@ -1642,7 +1675,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
 
     if (kibxy_lim_ > 0 && body_integral_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: SE3's body roll integral is being saturated!");
+      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: SE3's body roll integral is being saturated!");
     }
   }
 
@@ -1665,7 +1698,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     bool uav_mass_saturated = false;
     if (!std::isfinite(uav_mass_difference_)) {
       uav_mass_difference_ = 0;
-      ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
+      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: NaN detected in variable 'uav_mass_difference_', setting it to 0 and returning!!!");
     } else if (uav_mass_difference_ > km_lim_) {
       uav_mass_difference_ = km_lim_;
       uav_mass_saturated   = true;
@@ -1675,7 +1708,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     }
 
     if (uav_mass_saturated) {
-      ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: The UAV mass difference is being saturated to %.2f!", uav_mass_difference_);
+      ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: The UAV mass difference is being saturated to %.2f!", uav_mass_difference_);
     }
   }
 
@@ -1749,7 +1782,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       t[2] = -constraints.yaw_rate;
     }
   } else {
-    ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: missing dynamics constraints");
+    ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: missing dynamics constraints");
   }
 
   // | --------------- fill the resulting command --------------- |
@@ -1772,7 +1805,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
     output_command->mode_mask = output_command->MODE_ATTITUDE;
 
-    ROS_WARN_THROTTLE(1.0, "[Se3CopyController]: outputting desired orientation (this is not normal)");
+    ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: outputting desired orientation (this is not normal)");
   }
 
   output_command->desired_acceleration.x = desired_x_accel;
@@ -1876,7 +1909,7 @@ void Se3CopyController::switchOdometrySource(const mrs_msgs::UavState::ConstPtr&
 
   } else {
 
-    ROS_ERROR_THROTTLE(1.0, "[Se3CopyController]: could not transform world integral to the new frame");
+    ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: could not transform world integral to the new frame");
 
     std::scoped_lock lock(mutex_integrals_);
 
@@ -2038,23 +2071,43 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
   double msg_time_delay = std::abs(msg->stamp.toSec() - uav_state_.header.stamp.toSec());
   int bound_num_samples_delay = 2;
   if (!std::isfinite(encoder_angle_1_)||!std::isfinite(encoder_angle_2_)) {
-    ROS_ERROR("[Se3CopyController]: NaN detected in encoder angles");
+    if(_run_type_!="uav"){
+      ROS_ERROR("[Se3CopyController]: NaN detected in encoder angles");
+    }
+    else{
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD*10,"[Se3CopyController]: NaN detected in encoder angles");
+    }
     payload_spawned_ = false; //Put payload_spawned back to false in case the encoder stops giving finite values during a flight. Epl stays equal to zero when this flag is false, avoiding strange behaviors or non finite Epl. 
   }
   else if (!std::isfinite(encoder_velocity_1_)||!std::isfinite(encoder_velocity_2_)) {
-    ROS_ERROR("[Se3CopyController]: NaN detected in encoder angular velocities");
+    if(_run_type_!="uav"){
+      ROS_ERROR("[Se3CopyController]: NaN detected in encoder angular velocities");
+    }
+    else{
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD*10,"[Se3CopyController]: NaN detected in encoder angular velocities");
+    }
     payload_spawned_ = false;  
   }
   else if ((encoder_angle_1_>encoder_angle_1_max && encoder_angle_1_< encoder_angle_1_min) || (encoder_angle_2_>encoder_angle_2_max && encoder_angle_2_< encoder_angle_2_min)) {
-    ROS_ERROR("[Se3CopyController]: Out of expected range [-pi/2, pi/2] detected in encoder angles");
+    if(_run_type_!="uav"){
+      ROS_ERROR("[Se3CopyController]: Out of expected range [-pi/2, pi/2] detected in encoder angles");
+    }
+    else{
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD*10,"[Se3CopyController]: Out of expected range [-pi/2, pi/2] detected in encoder angles");
+    }
     payload_spawned_ = false; 
   }
   else if (msg_time_delay > dt_*bound_num_samples_delay) {
-    ROS_ERROR("[Se3CopyController]: Encoder msg is delayed by at least %d samples and is = %f", bound_num_samples_delay, msg_time_delay);
+    if(_run_type_!="uav"){
+      ROS_ERROR("[Se3CopyController]: Encoder msg is delayed by at least %d samples and is = %f", bound_num_samples_delay, msg_time_delay);
+    }
+    else{
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD*10,"[Se3CopyController]: Encoder msg is delayed by at least %d samples and is = %f", bound_num_samples_delay, msg_time_delay);
+    }
     payload_spawned_ = false; 
   }
   else{
-    ROS_INFO_THROTTLE(2.0,"[Se3CopyController]: Encoder angles and angular velocities returned are finite values and the angles are within the expected range.");
+    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD*5,"[Se3CopyController]: Encoder angles and angular velocities returned are finite values and the angles are within the expected range.");
     payload_spawned_ = true; // Values are finite and withing the expect range and thus can be used in the computations
   }
 
@@ -2298,7 +2351,7 @@ double Se3CopyController::calculateGainChange(const double dt, const double curr
   }
 
   if (fabs(change) > 1e-3) {
-    ROS_INFO_THROTTLE(1.0, "[Se3CopyController]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
+    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: changing gain '%s' from %.2f to %.2f", name.c_str(), current_value, desired_value);
     updated = true;
   }
 
