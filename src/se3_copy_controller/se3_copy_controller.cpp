@@ -212,6 +212,7 @@ private:
   double _max_time_delay_on_callback_data_follower_;
   double _max_time_delay_on_callback_data_leader_;
   bool both_uavs_connected_ = false;
+  double connection_time_;
   double connection_delay_;
   bool both_uavs_ready_ = false;
   bool deactivated_ = false;
@@ -672,6 +673,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
       if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_on_callback_data_follower_ && !both_uavs_connected_){
         // ros_time_out_.data = ros::Time::now().toSec();
+        connection_time_ = ros::Time::now().toSec();
         ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are connected");
         // ROS_INFO_STREAM("[Se3CopyController]: ROS-time leader when both UAVs are connected = "<< ros_time_out_.data);
         // try {
@@ -683,11 +685,11 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         both_uavs_connected_ = true;
       }
       if(both_uavs_connected_ && !both_uavs_ready_){
-        if(ros::Time::now().toSec() - ros_time_out_.data > connection_delay_){
+        if(ros::Time::now().toSec() - connection_time_ > connection_delay_){
           ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are ready");
           both_uavs_ready_ = true;
         }
-        else if(ros::Time::now().toSec() - ros_time_out_.data > connection_delay_/2){
+        else if(ros::Time::now().toSec() - connection_time_ > connection_delay_/2){
           ROS_INFO_STREAM("[Se3CopyController]: Sending message to determine ros delay");
           ros_time_trigger_l_to_f_.data = true;
           try {
@@ -753,6 +755,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
       if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_on_callback_data_leader_ && !both_uavs_connected_){
         // ros_time_out_.data = ros::Time::now().toSec();
+        connection_time_ = ros::Time::now().toSec();
         ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are connected");
         // ROS_INFO_STREAM("[Se3CopyController]: ROS-time follower when both UAVs are connected = "<< ros_time_out_.data);
         // try {
@@ -764,7 +767,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
         both_uavs_connected_ = true;
       }
       if(both_uavs_connected_ && !both_uavs_ready_){
-        if(ros::Time::now().toSec() - ros_time_out_.data > connection_delay_){
+        if(ros::Time::now().toSec() - connection_time_ > connection_delay_){
           ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are ready");
           both_uavs_ready_ = true;
         }
