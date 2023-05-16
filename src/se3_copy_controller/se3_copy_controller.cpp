@@ -2210,7 +2210,12 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
     }
   } 
   else{
-    ROS_ERROR("[Se3CopyController]: Something is wrong with the encoder msg as payload_spawned_ = false and therefor the encoder and the anchoring point data are NOT globally updated or published.");
+    if(_run_type_!="uav"){
+      ROS_ERROR("[Se3CopyController]: Something is wrong with the encoder msg as payload_spawned_ = false and therefor the encoder and the anchoring point data are NOT globally updated or published.");
+    }
+    else{
+      ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Something is wrong with the encoder msg as payload_spawned_ = false and therefore the encoder and the anchoring point data are NOT globally updated or published.");
+    }
   }
 }
 
