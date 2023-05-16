@@ -700,7 +700,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
           }
 
           ros_time_out_.data = ros::Time::now().toSec();
-          ROS_INFO_STREAM("[Se3CopyController]: ROS-time leader = "<< ros_time_out_.data);
+          ROS_INFO_THROTTLE(connection_delay_,"[Se3CopyController]: ROS-time leader = "<< ros_time_out_.data);
           try {
             ros_time_pub_.publish(ros_time_out_);
           }
@@ -2250,7 +2250,7 @@ void Se3CopyController::ElandFollowerToLeaderCallback(const mrs_msgs::BoolStampe
 
 void Se3CopyController::rosTimeTriggerCallback(const std_msgs::Bool& msg){
   ros_time_out_.data = ros::Time::now().toSec();
-  ROS_INFO_STREAM("[Se3CopyController]: ROS-time follower = "<< ros_time_out_.data);
+  ROS_INFO_THROTTLE(connection_delay_,"[Se3CopyController]: ROS-time follower = "<< ros_time_out_.data);
   try {
     ros_time_pub_.publish(ros_time_out_);
   }
