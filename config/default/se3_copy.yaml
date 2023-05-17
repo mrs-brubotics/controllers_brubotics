@@ -85,9 +85,10 @@ payload:
     max: deg(60)  # Eland if max swing angle is reached to avoid hitting the legs of the UAV
 
 two_uavs_payload:
-  callback_data_max_time_delay:
-    follower: 0.50 # = 10*_dt_0_
-    leader: 0.100 # = 20*_dt_0_
+  # callback_data_max_time_delay:
+  #   follower: 0.50 # = 10*_dt_0_
+  #   leader: 0.100 # = 20*_dt_0_
+  max_time_delay_safety_communication: 0.4 # [s] max time delay between UAVs before Eland
   nimbro:
     emulate_nimbro: false
     emulate_nimbro_delay: 0

@@ -209,8 +209,9 @@ private:
   std_msgs::Bool ros_time_trigger_l_;
   // std_msgs::Float64 ros_delay_out_;
   // int n_ros_delay_ = 0;
-  double _max_time_delay_on_callback_data_follower_;
-  double _max_time_delay_on_callback_data_leader_;
+  double _max_time_delay_safety_communication_;
+  // double _max_time_delay_on_callback_data_follower_;
+  // double _max_time_delay_on_callback_data_leader_;
   bool both_uavs_connected_ = false;
   double connection_time_;
   double connection_delay_;
@@ -411,8 +412,9 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("payload/Epl_max/scaling", _Epl_max_scaling_);
   param_loader.loadParam("payload/swing_angle/failsafe_enabled", max_swing_angle_failsafe_enabled_);  
   param_loader.loadParam("payload/swing_angle/max", max_swing_angle_);
-  param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
-  param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
+  param_loader.loadParam("two_uavs_payload/max_time_delay_safety_communication", _max_time_delay_safety_communication_);
+  // param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
+  // param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
   param_loader.loadParam("two_uavs_payload/connection_delay", connection_delay_); 
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro", emulate_nimbro_);
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro_delay", emulate_nimbro_delay_);
@@ -671,7 +673,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       
       time_delay_Eland_controller_follower_to_leader_out_.data = (ros::Time::now() - Eland_controller_follower_to_leader_.stamp).toSec();
       ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
-      if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_on_callback_data_follower_ && !both_uavs_connected_){
+      if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_safety_communication_ && !both_uavs_connected_){
         // ros_time_out_.data = ros::Time::now().toSec();
         connection_time_ = ros::Time::now().toSec();
         ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are connected");
@@ -709,8 +711,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
           }
         }
       }
-      if(time_delay_Eland_controller_follower_to_leader_out_.data > 2*_max_time_delay_on_callback_data_follower_ && both_uavs_ready_){
+      if(time_delay_Eland_controller_follower_to_leader_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_){
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
         Eland = true;
       }
 
@@ -753,7 +756,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
       time_delay_Eland_controller_leader_to_follower_out_.data = (ros::Time::now() - Eland_controller_leader_to_follower_.stamp).toSec();
       ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
-      if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_on_callback_data_leader_ && !both_uavs_connected_){
+      if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_safety_communication_ && !both_uavs_connected_){
         // ros_time_out_.data = ros::Time::now().toSec();
         connection_time_ = ros::Time::now().toSec();
         ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are connected");
@@ -772,8 +775,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
           both_uavs_ready_ = true;
         }
       }
-      if(time_delay_Eland_controller_leader_to_follower_out_.data > 2*_max_time_delay_on_callback_data_leader_ && both_uavs_ready_){
+      if(time_delay_Eland_controller_leader_to_follower_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_){
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
+        ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
         Eland = true;
       }
 
