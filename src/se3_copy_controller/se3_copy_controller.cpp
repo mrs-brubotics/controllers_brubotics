@@ -656,14 +656,14 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
 
   // | ----------------- 2UAVs safety communication --------------|
   if(_type_of_system_=="2uavs_payload" && payload_spawned_){
-    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Starting 2UAVs safety communication");
+    // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Starting 2UAVs safety communication");
     bool Eland = false;
     // if(Eland_tracker_to_controller_.data){
     //   ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (tracker)");
     //   Eland = true;
     // }
     if(_uav_name_==_leader_uav_name_){
-      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: leader");
+      // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: leader");
       if(Eland_controller_follower_to_leader_.data){
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
         Eland = true;
@@ -690,7 +690,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
           both_uavs_ready_ = true;
         }
         else if(ros::Time::now().toSec() - connection_time_ > connection_delay_/2){
-          ROS_INFO_STREAM("[Se3CopyController]: Sending message to determine ros delay");
+          ROS_INFO_THROTTLE(connection_delay_,"[Se3CopyController]: Sending message to determine ros delay");
           ros_time_trigger_l_.data = true;
           try {
             ros_time_trigger_l_pub_.publish(ros_time_trigger_l_);
@@ -745,7 +745,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       }
     }
     else if(_uav_name_==_follower_uav_name_){
-      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: follower");
+      // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: follower");
       if(Eland_controller_leader_to_follower_.data){
         ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
         Eland = true;
