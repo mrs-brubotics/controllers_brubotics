@@ -89,9 +89,10 @@ two_uavs_payload:
   #   follower: 0.50 # = 10*_dt_0_
   #   leader: 0.100 # = 20*_dt_0_
   max_time_delay_safety_communication: 0.4 # [s] max time delay between UAVs before Eland
+  n_ros_time_triggers: 4 # Number of times the trigger to determine time delay between both UAVs is sent (> 1 to be sure follower receives at least one trigger)
   nimbro:
     emulate_nimbro: false
     emulate_nimbro_delay: 0
-  connection_delay: 2 # Delay between when UAVs first receive messages and when they Eland if the message delay is too high 
+  ready_delay: 2 # Delay between when UAVs first receive messages and when they Eland if the message delay is too high 
 
 ros_info_throttle_period: 0.1 # period of prints in the controller and tracker
