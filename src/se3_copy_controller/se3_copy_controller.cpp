@@ -885,7 +885,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: could not calculate the UAV heading");
   }
 
-  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: UAV heading %f", uav_heading_);
+  // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: UAV heading %f", uav_heading_);
 
   // --------------------------------------------------------------
   // |          load the control reference and estimates          |
