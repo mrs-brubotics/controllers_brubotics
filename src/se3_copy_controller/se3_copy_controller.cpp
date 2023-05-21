@@ -174,8 +174,9 @@ private:
   // ros::Publisher Eland_controller_leader_at_follower_pub_;
   // ros::Publisher Eland_controller_follower_at_leader_pub_;
   // ros::Publisher ros_delay_pub_;
-  ros::Publisher ros_time_pub_;
-  ros::Publisher ros_time_trigger_l_pub_;
+  ros::Publisher ros_time_l_to_f_pub_;
+  ros::Publisher ros_time_delay_pub_;
+  ros::Publisher Eland_time_pub_;
   ros::Publisher time_delay_Eland_controller_leader_to_follower_pub_;
   ros::Publisher time_delay_Eland_controller_follower_to_leader_pub_;
 
@@ -205,21 +206,24 @@ private:
   void ElandFollowerToLeaderCallback(const mrs_msgs::BoolStamped& msg);
   mrs_msgs::BoolStamped Eland_controller_follower_to_leader_;
   std_msgs::Float64 time_delay_Eland_controller_follower_to_leader_out_;
-  ros::Subscriber ros_time_trigger_l_sub_;
-  void rosTimeTriggerCallback(const std_msgs::Bool& msg);
-  std_msgs::Float64 ros_time_out_;
-  std_msgs::Bool ros_time_trigger_l_;
+  ros::Subscriber ros_time_l_to_f_sub_;
+  void rosTimeLeaderToFollowerCallback(const std_msgs::Float64& msg);
+  std_msgs::Float64 ros_time_l_to_f_;
+  std_msgs::Float64 ros_time_delay_;
+  std_msgs::Float64 Eland_time_;
   double _max_time_delay_safety_communication_;
   bool Eland_status_ = false;
   // double _max_time_delay_on_callback_data_follower_;
   // double _max_time_delay_on_callback_data_leader_;
   bool both_uavs_connected_ = false;
   double connection_time_;
+  double activation_time_ = 0;
+  double connection_delay_;
   double ready_delay_;
   bool both_uavs_ready_ = false;
   bool deactivated_ = false;
-  int n_ros_time_triggers_;
-  int i_ros_time_triggers_ = 0;
+  int n_ros_time_l_to_f_;
+  int i_ros_time_l_to_f_ = 0;
 
   // // communication Eland all UAVs
   // ros::Subscriber Eland_tracker_to_controller_sub_;
@@ -416,9 +420,10 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("payload/swing_angle/failsafe_enabled", max_swing_angle_failsafe_enabled_);  
   param_loader.loadParam("payload/swing_angle/max", max_swing_angle_);
   param_loader.loadParam("two_uavs_payload/max_time_delay_safety_communication", _max_time_delay_safety_communication_);
-  param_loader.loadParam("two_uavs_payload/n_ros_time_triggers",n_ros_time_triggers_);
+  param_loader.loadParam("two_uavs_payload/n_ros_time_l_to_f",n_ros_time_l_to_f_);
   // param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
   // param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
+  param_loader.loadParam("two_uavs_payload/connection_delay", connection_delay_);
   param_loader.loadParam("two_uavs_payload/ready_delay", ready_delay_); 
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro", emulate_nimbro_);
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro_delay", emulate_nimbro_delay_);
@@ -457,18 +462,16 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
 
   // 2UAVs safety communication
   if(_type_of_system_=="2uavs_payload"){
-    // ros_delay_pub_ = nh_.advertise<std_msgs::Float64>("ros_delay",1);
-    ros_time_pub_ = nh_.advertise<std_msgs::Float64>("ros_time",1);
+    Eland_time_pub_ = nh_.advertise<std_msgs::Float64>("Eland_time",1);
     if (_uav_name_ == _leader_uav_name_){  // leader
       Eland_controller_leader_to_follower_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_l_to_f",1);
       time_delay_Eland_controller_follower_to_leader_pub_ = nh_.advertise<std_msgs::Float64>("time_delay_Eland_controller_follower_to_leader",1);
-      ros_time_trigger_l_pub_ = nh_.advertise<std_msgs::Bool>("ros_time_trigger_l",1);
-      // Eland_controller_follower_at_leader_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_f_at_l",1);
+      ros_time_l_to_f_pub_ = nh_.advertise<std_msgs::Float64>("ros_time_l_to_f",1);
     }
     else if(_uav_name_ == _follower_uav_name_){
       Eland_controller_follower_to_leader_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_f_to_l",1);
       time_delay_Eland_controller_leader_to_follower_pub_ = nh_.advertise<std_msgs::Float64>("time_delay_Eland_controller_leader_to_follower",1);
-      // Eland_controller_leader_at_follower_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_l_at_f",1);
+      ros_time_delay_pub_ = nh_.advertise<std_msgs::Float64>("ros_time_delay",1);
     }  
   }
 
@@ -501,7 +504,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     }
     else if(_uav_name_ == _follower_uav_name_){
       Eland_controller_leader_to_follower_sub_ = nh_.subscribe("/"+_leader_uav_name_+"/control_manager/se3_copy_controller/Eland_contr_l_to_f", 1, &Se3CopyController::ElandLeaderToFollowerCallback, this, ros::TransportHints().tcpNoDelay());
-      ros_time_trigger_l_sub_ = nh_.subscribe("/"+_leader_uav_name_+"/control_manager/se3_copy_controller/ros_time_trigger_l", 1, &Se3CopyController::rosTimeTriggerCallback, this, ros::TransportHints().tcpNoDelay());
+      ros_time_l_to_f_sub_ = nh_.subscribe("/"+_leader_uav_name_+"/control_manager/se3_copy_controller/ros_time_l_to_f", 1, &Se3CopyController::rosTimeLeaderToFollowerCallback, this, ros::TransportHints().tcpNoDelay());
       // Eland_tracker_to_controller_sub_ = nh2_.subscribe("/"+_follower_uav_name_+"/control_manager/dergbryan_tracker/Eland_tracker_to_controller", 1, &Se3CopyController::Eland_tracker_to_controller_callback, this, ros::TransportHints().tcpNoDelay());
     }  
   }
@@ -654,144 +657,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   }
 
   // | ----------------- 2UAVs safety communication --------------|
-  // if(_type_of_system_=="2uavs_payload" && payload_spawned_){
-  //   // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Starting 2UAVs safety communication");
-  //   bool Eland = false;
-  //   if(_uav_name_==_leader_uav_name_){
-  //     // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: leader");
-  //     if(Eland_controller_follower_to_leader_.data){ // Eland if Eland message from follower is true
-  //       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
-  //       Eland = true;
-  //     }
-      
-  //     time_delay_Eland_controller_follower_to_leader_out_.data = (ros::Time::now() - Eland_controller_follower_to_leader_.stamp).toSec();
-  //     ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
-
-
-  //     if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_safety_communication_ && !both_uavs_connected_){ // Detection of first received message, which indicates that the communication started
-  //       connection_time_ = ros::Time::now().toSec();
-  //       ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are connected");
-  //       both_uavs_connected_ = true;
-  //     }
-
-  //     if(both_uavs_connected_ && !both_uavs_ready_){
-  //       if(ros::Time::now().toSec() - connection_time_ > connection_delay_){ // Both UAVs are ready after the are connected for the first time, with a delay of connection_delay 
-  //         ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are ready");
-  //         both_uavs_ready_ = true;
-  //       }
-  //       else if(ros::Time::now().toSec() - connection_time_ > connection_delay_/2){ // Code to determine time delay between both UAVs (used to determine Eland delay afterwards)
-  //         ROS_INFO_THROTTLE(connection_delay_,"[Se3CopyController]: Sending message to determine ros delay");
-  //         ros_time_trigger_l_.data = true;
-  //         try {
-  //           ros_time_trigger_l_pub_.publish(ros_time_trigger_l_);
-  //         }
-  //         catch (...) {
-  //           ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_trigger_l_pub_.getTopic().c_str());
-  //         }
-
-  //         ros_time_out_.data = ros::Time::now().toSec();
-  //         ROS_INFO_THROTTLE(connection_delay_,"[Se3CopyController]: ROS-time leader = %f ", ros_time_out_.data);
-  //         try {
-  //           ros_time_pub_.publish(ros_time_out_);
-  //         }
-  //         catch (...) {
-  //           ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_pub_.getTopic().c_str());
-  //         }
-  //       }
-  //     }
-
-  //     if(time_delay_Eland_controller_follower_to_leader_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_ && is_active_){ // Eland if time since last received message from follower is > _max_time_delay_safety_communication_
-  //       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
-  //       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
-  //       Eland = true;
-  //     }
-
-  //     if(deactivated_ || Eland){
-  //       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending Eland to follower");
-  //       Eland_controller_leader_to_follower_.data = true;
-  //     }
-  //     else{
-  //       Eland_controller_leader_to_follower_.data = false;
-  //     }
-      
-  //     if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
-  //       // Sending Eland true or false to follower
-  //       try {
-  //         Eland_controller_leader_to_follower_pub_.publish(Eland_controller_leader_to_follower_);
-  //       }
-  //       catch (...) {
-  //         ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_leader_to_follower_pub_.getTopic().c_str());
-  //       }
-  //     }
-  //     // Publishing time_delay for rosbag
-  //     try {
-  //       time_delay_Eland_controller_follower_to_leader_pub_.publish(time_delay_Eland_controller_follower_to_leader_out_);
-  //     }
-  //     catch (...) {
-  //       ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", time_delay_Eland_controller_follower_to_leader_pub_.getTopic().c_str());
-  //     }
-  //   }
-  //   else if(_uav_name_==_follower_uav_name_){
-  //     // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: follower");
-  //     if(Eland_controller_leader_to_follower_.data){ // Eland if Eland message from leader is true
-  //       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
-  //       Eland = true;
-  //     }
-
-  //     time_delay_Eland_controller_leader_to_follower_out_.data = (ros::Time::now() - Eland_controller_leader_to_follower_.stamp).toSec();
-  //     ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
-
-
-  //     if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_safety_communication_ && !both_uavs_connected_){ // Detection of first received message, which indicates that the communication started
-  //       connection_time_ = ros::Time::now().toSec();
-  //       ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are connected");
-  //       both_uavs_connected_ = true;
-  //     }
-  //     if(both_uavs_connected_ && !both_uavs_ready_){ 
-  //       if(ros::Time::now().toSec() - connection_time_ > connection_delay_){ // Both UAVs are ready after the are connected for the first time, with a delay of connection_delay
-  //         ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are ready");
-  //         both_uavs_ready_ = true;
-  //       }
-  //     }
-  //     if(time_delay_Eland_controller_leader_to_follower_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_ && is_active_){ // Eland if time since last received message from follower is > _max_time_delay_safety_communication_
-  //       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
-  //       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
-  //       Eland = true;
-  //     }
-
-  //     if(deactivated_ || Eland){
-  //       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending Eland to leader");
-  //       Eland_controller_follower_to_leader_.data = true;
-  //     }
-  //     else{
-  //       Eland_controller_follower_to_leader_.data = false;
-  //     }
-
-  //     if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
-  //       // Sending Eland true or false to follower
-  //       try {
-  //         Eland_controller_follower_to_leader_pub_.publish(Eland_controller_follower_to_leader_);
-  //       }
-  //       catch (...) {
-  //         ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_controller_follower_to_leader_pub_.getTopic().c_str());
-  //       }
-  //     }
-  //     // Publishing time_delay for rosbag
-  //     try {
-  //       time_delay_Eland_controller_leader_to_follower_pub_.publish(time_delay_Eland_controller_leader_to_follower_out_);
-  //     }
-  //     catch (...) {
-  //       ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", time_delay_Eland_controller_leader_to_follower_pub_.getTopic().c_str());
-  //     }
-
-  //   }
-  //   if(Eland && is_active_){
-  //     ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Returning empty command to trigger Eland");
-  //     return mrs_msgs::AttitudeCommand::ConstPtr();
-  //   }
-  // }
-
-  if(_type_of_system_=="2uavs_payload" && payload_spawned_){
+  if(_type_of_system_=="2uavs_payload"){
     // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Starting 2UAVs safety communication");
     SafetyCommunication();
     if(Eland_status_ && is_active_){
@@ -1988,49 +1854,69 @@ void Se3CopyController::SafetyCommunication(void) {
       both_uavs_connected_ = true;
     }
 
-    // Pseudo-code to determine time delay between UAVs needed to determine Eland delay
-    if(both_uavs_connected_ && (i_ros_time_triggers_ < n_ros_time_triggers_)){
-      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending message to determine ros delay");
-      ros_time_trigger_l_.data = true;
-      try {
-        ros_time_trigger_l_pub_.publish(ros_time_trigger_l_);
-      }
-      catch (...) {
-        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_trigger_l_pub_.getTopic().c_str());
-      }
-
-      ros_time_out_.data = ros::Time::now().toSec();
-      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS-time leader = %f ", ros_time_out_.data);
-      try {
-        ros_time_pub_.publish(ros_time_out_);
-      }
-      catch (...) {
-        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_pub_.getTopic().c_str());
-      }
-      i_ros_time_triggers_ ++;
+    // Detection activation controller
+    if(is_active_ && activation_time_==0){
+      activation_time_ = ros::Time::now().toSec();
     }
 
-    // Safety communication enabled a "ready_delay_" seconds after takeoff height reached
-    if(both_uavs_connected_ && is_active_ && !both_uavs_ready_){
-      if(ros::Time::now().toSec() - connection_time_ > ready_delay_){
-        ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are ready");
+    // Leader sends its ros time to follower so that the follower can determine the ros time difference
+    if(both_uavs_connected_ && (ros::Time::now().toSec()-connection_time_ > connection_delay_)){
+      if(i_ros_time_l_to_f_ < n_ros_time_l_to_f_){
+        ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending message to determine ros delay");
+        ros_time_l_to_f_.data = ros::Time::now().toSec();
+        if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
+          try {
+            ros_time_l_to_f_pub_.publish(ros_time_l_to_f_);
+            ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Published message to determine ros delay");
+          }
+          catch (...) {
+            ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_l_to_f_pub_.getTopic().c_str());
+          }
+        }
+
+        i_ros_time_l_to_f_ ++;
+      }
+    }
+
+    // Safety communication enabled "ready_delay_" seconds after takeoff height reached
+    if(both_uavs_connected_ && is_active_ && !both_uavs_ready_ && payload_once_spawned_){
+      if(ros::Time::now().toSec() - activation_time_ > ready_delay_){
         both_uavs_ready_ = true;
       }
     }
 
+    if(both_uavs_ready_){ // For the operator to see that both UAvs are ready
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
+    }
+
     // 3 reasons why Eland_status_ should be true
+    bool Eland_status = false; // local variable
     if(deactivated_){ // if controller is deactivated by controlManager
-      Eland_status_ = true;
+      Eland_status = true;
     }
     if(Eland_controller_follower_to_leader_.data){ // if Eland_status_ of follower is true
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
-      Eland_status_ = true;
+      Eland_status = true;
     }
     if(time_delay_Eland_controller_follower_to_leader_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_){ // Eland if time since last received message from follower is > _max_time_delay_safety_communication_
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
-      Eland_status_ = true;
+      Eland_status = true;
     }
+
+    // Time at which Eland occurs the first time
+    if(Eland_status && !Eland_status_){
+      Eland_time_.data = ros::Time::now().toSec();
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland time leader = %f",Eland_time_.data);
+      try {
+        Eland_time_pub_.publish(Eland_time_);
+      }
+      catch (...) {
+        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_time_pub_.getTopic().c_str());
+      }
+    }
+    Eland_status_ = Eland_status;
+
 
     if(Eland_status_){
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending Eland to follower");
@@ -2067,32 +1953,53 @@ void Se3CopyController::SafetyCommunication(void) {
       both_uavs_connected_ = true;
     }
 
-    // Safety communication enabled a "ready_delay_" seconds after takeoff height reached
-    if(both_uavs_connected_ && is_active_ && !both_uavs_ready_){
-      if(ros::Time::now().toSec() - connection_time_ > ready_delay_){
-        ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are ready");
+    // Detection activation controller
+    if(is_active_ && activation_time_==0){
+      activation_time_ = ros::Time::now().toSec();
+    }
+
+    // Safety communication enabled "ready_delay_" seconds after takeoff height reached
+    if(both_uavs_connected_ && is_active_ && !both_uavs_ready_ && payload_once_spawned_){
+      if(ros::Time::now().toSec() - activation_time_ > ready_delay_){
         both_uavs_ready_ = true;
       }
     }
 
+    if(both_uavs_ready_){ // For the operator to see that both UAvs are ready
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
+    }
+
     // 3 reasons why Eland_status_ should be true
+    bool Eland_status = false; // local variable
     if(deactivated_){
-      Eland_status_ = true;
+      Eland_status = true;
     }
     if(Eland_controller_leader_to_follower_.data){ // Eland if Eland message from leader is true
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
-      Eland_status_ = true;
+      Eland_status = true;
     }
     if(time_delay_Eland_controller_leader_to_follower_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_ && is_active_){ // Eland if time since last received message from follower is > _max_time_delay_safety_communication_
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
-      Eland_status_ = true;
+      Eland_status = true;
     }
+
+    // Time at which Eland occurs the first time
+    if(Eland_status && !Eland_status_){
+      Eland_time_.data = ros::Time::now().toSec();
+      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland time follower = %f",Eland_time_.data);
+      try {
+        Eland_time_pub_.publish(Eland_time_);
+      }
+      catch (...) {
+        ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", Eland_time_pub_.getTopic().c_str());
+      }
+    }
+    Eland_status_ = Eland_status;
 
     if(Eland_status_){
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending Eland to leader");
     }
-
     Eland_controller_follower_to_leader_.data = Eland_status_;
 
     if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
@@ -2355,44 +2262,27 @@ void Se3CopyController::BacaLoadStatesCallback(const mrs_msgs::BacaProtocolConst
 
 void Se3CopyController::ElandLeaderToFollowerCallback(const mrs_msgs::BoolStamped& msg){
   Eland_controller_leader_to_follower_ = msg;
-  // if(n_ros_delay_<10){
-  //   n_ros_delay_ ++;
-  //   ros_delay_out_.data = -(ros::Time::now() - Eland_controller_leader_to_follower_.stamp).toSec();
-  //   ROS_INFO_STREAM("[Se3CopyController]: ros delay at follower = " << ros_delay_out_.data);
-  //   try {
-  //     ros_delay_pub_.publish(ros_delay_out_);
-  //   }
-  //   catch (...) {
-  //     ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_delay_pub_.getTopic().c_str());
-  //   }
-  // }
   Eland_controller_leader_to_follower_.stamp = ros::Time::now();
 }
 
 void Se3CopyController::ElandFollowerToLeaderCallback(const mrs_msgs::BoolStamped& msg){
   Eland_controller_follower_to_leader_ = msg;
-  // if(n_ros_delay_<10){
-  //   n_ros_delay_ ++;
-  //   ros_delay_out_.data = (ros::Time::now() - Eland_controller_follower_to_leader_.stamp).toSec();
-  //   ROS_INFO_STREAM("[Se3CopyController]: ros delay at leader = " << ros_delay_out_.data);
-  //   try {
-  //     ros_delay_pub_.publish(ros_delay_out_);
-  //   }
-  //   catch (...) {
-  //     ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_delay_pub_.getTopic().c_str());
-  //   }
-  // }
   Eland_controller_follower_to_leader_.stamp = ros::Time::now();
 }
 
-void Se3CopyController::rosTimeTriggerCallback(const std_msgs::Bool& msg){
-  ros_time_out_.data = ros::Time::now().toSec();
-  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS-time follower = %f ",ros_time_out_.data);
+void Se3CopyController::rosTimeLeaderToFollowerCallback(const std_msgs::Float64& msg){
+  double ros_time_leader = msg.data;
+  double ros_time_follower = ros::Time::now().toSec();
+  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS time leader = %f ",ros_time_leader);
+  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS time follower = %f ",ros_time_follower);
+
+  ros_time_delay_.data = ros_time_leader - ros_time_follower;
+  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS time delay leader - follower = %f ",ros_time_delay_.data);
   try {
-    ros_time_pub_.publish(ros_time_out_);
+    ros_time_delay_pub_.publish(ros_time_delay_);
   }
   catch (...) {
-    ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_pub_.getTopic().c_str());
+    ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_delay_pub_.getTopic().c_str());
   }
 }
 
