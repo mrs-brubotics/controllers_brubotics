@@ -222,8 +222,11 @@ private:
   double ready_delay_;
   bool both_uavs_ready_ = false;
   bool deactivated_ = false;
+  bool determine_ros_time_delay_;
   int n_ros_time_l_to_f_;
   int i_ros_time_l_to_f_ = 0;
+  int ros_time_l_to_f_period_;
+  int ros_time_l_to_f_period_i_= 1;
 
   // // communication Eland all UAVs
   // ros::Subscriber Eland_tracker_to_controller_sub_;
@@ -420,7 +423,9 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("payload/swing_angle/failsafe_enabled", max_swing_angle_failsafe_enabled_);  
   param_loader.loadParam("payload/swing_angle/max", max_swing_angle_);
   param_loader.loadParam("two_uavs_payload/max_time_delay_safety_communication", _max_time_delay_safety_communication_);
-  param_loader.loadParam("two_uavs_payload/n_ros_time_l_to_f",n_ros_time_l_to_f_);
+  param_loader.loadParam("two_uavs_payload/ros_time_delay/n_ros_time_l_to_f",n_ros_time_l_to_f_);
+  param_loader.loadParam("two_uavs_payload/ros_time_delay/determine_ros_time_delay",determine_ros_time_delay_);
+  param_loader.loadParam("two_uavs_payload/ros_time_delay/ros_time_l_to_f_period",ros_time_l_to_f_period_);
   // param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/follower", _max_time_delay_on_callback_data_follower_);
   // param_loader.loadParam("two_uavs_payload/callback_data_max_time_delay/leader", _max_time_delay_on_callback_data_leader_);
   param_loader.loadParam("two_uavs_payload/connection_delay", connection_delay_);
@@ -1875,23 +1880,30 @@ void Se3CopyController::SafetyCommunication(void) {
     }
 
     // Leader sends its ros time to follower so that the follower can determine the ros time difference
-    if(both_uavs_connected_ && (ros::Time::now().toSec()-connection_time_ > connection_delay_)){
+    if(determine_ros_time_delay_){
       if(i_ros_time_l_to_f_ < n_ros_time_l_to_f_){
-        // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending message to determine ros delay");
-        ros_time_l_to_f_.data = ros::Time::now().toSec();
-        if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
-          try {
-            ros_time_l_to_f_pub_.publish(ros_time_l_to_f_);
-          }
-          catch (...) {
-            ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_l_to_f_pub_.getTopic().c_str());
-          }
+        if(both_uavs_connected_ && (ros::Time::now().toSec()-connection_time_ > connection_delay_)){
+          if(ros_time_l_to_f_period_i_ >= ros_time_l_to_f_period_){
+            if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
+              ros_time_l_to_f_.data = ros::Time::now().toSec();
+              // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending message to determine ros delay");
+              try {
+                ros_time_l_to_f_pub_.publish(ros_time_l_to_f_);
+              }
+              catch (...) {
+                ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_l_to_f_pub_.getTopic().c_str());
+              }
+              i_ros_time_l_to_f_ ++;
+              ros_time_l_to_f_period_i_ = 1;
+            }
+            else{
+              ros_time_l_to_f_period_i_ ++;
+            }
+          } 
         }
-
-        i_ros_time_l_to_f_ ++;
       }
     }
-
+    
     // Safety communication enabled "ready_delay_" seconds after takeoff height reached
     if(both_uavs_connected_ && is_active_ && !both_uavs_ready_ && payload_once_spawned_){
       if(ros::Time::now().toSec() - activation_time_ > ready_delay_){
@@ -1899,10 +1911,6 @@ void Se3CopyController::SafetyCommunication(void) {
         ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
       }
     }
-
-    // if(both_uavs_ready_){ // For the operator to see that both UAvs are ready
-    //   ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
-    // }
 
     // 3 reasons why Eland_status_ should be true
     bool Eland_status = false; // local variable
@@ -1980,10 +1988,6 @@ void Se3CopyController::SafetyCommunication(void) {
         ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
       }
     }
-
-    // if(both_uavs_ready_){ // For the operator to see that both UAvs are ready
-    //   ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
-    // }
 
     // 3 reasons why Eland_status_ should be true
     bool Eland_status = false; // local variable
