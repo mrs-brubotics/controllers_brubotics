@@ -662,7 +662,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   }
 
   // | ----------------- 2UAVs safety communication --------------|
-  if(_type_of_system_=="2uavs_payload"){
+  if(_type_of_system_=="2uavs_payload" && payload_once_spawned_){
     // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Starting 2UAVs safety communication");
     SafetyCommunication();
     if(Eland_status_ && is_active_){
