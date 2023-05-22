@@ -1877,12 +1877,11 @@ void Se3CopyController::SafetyCommunication(void) {
     // Leader sends its ros time to follower so that the follower can determine the ros time difference
     if(both_uavs_connected_ && (ros::Time::now().toSec()-connection_time_ > connection_delay_)){
       if(i_ros_time_l_to_f_ < n_ros_time_l_to_f_){
-        ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending message to determine ros delay");
+        // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Sending message to determine ros delay");
         ros_time_l_to_f_.data = ros::Time::now().toSec();
         if(!emulate_nimbro_ || (emulate_nimbro_time_ == 0)){
           try {
             ros_time_l_to_f_pub_.publish(ros_time_l_to_f_);
-            ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Published message to determine ros delay");
           }
           catch (...) {
             ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_l_to_f_pub_.getTopic().c_str());
@@ -1897,12 +1896,13 @@ void Se3CopyController::SafetyCommunication(void) {
     if(both_uavs_connected_ && is_active_ && !both_uavs_ready_ && payload_once_spawned_){
       if(ros::Time::now().toSec() - activation_time_ > ready_delay_){
         both_uavs_ready_ = true;
+        ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
       }
     }
 
-    if(both_uavs_ready_){ // For the operator to see that both UAvs are ready
-      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
-    }
+    // if(both_uavs_ready_){ // For the operator to see that both UAvs are ready
+    //   ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
+    // }
 
     // 3 reasons why Eland_status_ should be true
     bool Eland_status = false; // local variable
@@ -1977,12 +1977,13 @@ void Se3CopyController::SafetyCommunication(void) {
     if(both_uavs_connected_ && is_active_ && !both_uavs_ready_ && payload_once_spawned_){
       if(ros::Time::now().toSec() - activation_time_ > ready_delay_){
         both_uavs_ready_ = true;
+        ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
       }
     }
 
-    if(both_uavs_ready_){ // For the operator to see that both UAvs are ready
-      ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
-    }
+    // if(both_uavs_ready_){ // For the operator to see that both UAvs are ready
+    //   ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Both UAVs are ready");
+    // }
 
     // 3 reasons why Eland_status_ should be true
     bool Eland_status = false; // local variable
@@ -2288,11 +2289,11 @@ void Se3CopyController::ElandFollowerToLeaderCallback(const mrs_msgs::BoolStampe
 void Se3CopyController::rosTimeLeaderToFollowerCallback(const std_msgs::Float64& msg){
   double ros_time_leader = msg.data;
   double ros_time_follower = ros::Time::now().toSec();
-  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS time leader = %f ",ros_time_leader);
-  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS time follower = %f ",ros_time_follower);
+  // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS time leader = %f ",ros_time_leader);
+  // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS time follower = %f ",ros_time_follower);
 
   ros_time_delay_.data = ros_time_leader - ros_time_follower;
-  ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS time delay leader - follower = %f ",ros_time_delay_.data);
+  // ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: ROS time delay leader - follower = %f ",ros_time_delay_.data);
   try {
     ros_time_delay_pub_.publish(ros_time_delay_);
   }
