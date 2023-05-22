@@ -648,25 +648,6 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
     ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", uav_state_publisher_.getTopic().c_str());
   }
 
-
-
-
-  // | ----------------- get the Roll Pitch and Yaw and heading---------------- | // For debugging
-  try {
-    mrs_lib::AttitudeConverter Orientation = mrs_lib::AttitudeConverter(uav_state->pose.orientation);
-    double roll = Orientation.getRoll();
-    double pitch = Orientation.getPitch();
-    double yaw = Orientation.getYaw();
-    double heading = Orientation.getHeading();
-    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: UAV roll = %f", roll);
-    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: UAV pitch = %f", pitch);
-    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: UAV yaw = %f", yaw);
-    ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: UAV heading = %f", heading);
-  }
-  catch (...) {
-    ROS_ERROR_THROTTLE(ROS_INFO_THROTTLE_PERIOD, "[Se3CopyController]: could not calculate the roll pitch, yaw and heading");
-  }
-
   // Emulates nimbro communication
   if(emulate_nimbro_){
     emulate_nimbro_time_ = emulate_nimbro_time_ + dt_;
