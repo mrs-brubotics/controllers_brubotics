@@ -89,7 +89,7 @@ two_uavs_payload:
   #   follower: 0.50 # = 10*_dt_0_
   #   leader: 0.100 # = 20*_dt_0_
   max_time_delay_safety_communication: 0.4 # [s] max time delay between UAVs before Eland
-  n_ros_time_l_to_f: 100 # Number of times the leader sends its time to the leader (>> 1 so that a more precise ros time delay can be determined)
+  n_ros_time_l_to_f: 10 # Number of times the leader sends its time to the leader (>> 1 so that a more precise ros time delay can be determined)
   nimbro:
     emulate_nimbro: false
     emulate_nimbro_delay: 0
