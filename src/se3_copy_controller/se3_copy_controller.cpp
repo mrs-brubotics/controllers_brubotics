@@ -657,7 +657,7 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
   // Emulates nimbro communication
   if(emulate_nimbro_){
     emulate_nimbro_time_ = emulate_nimbro_time_ + dt_;
-    if(emulate_nimbro_time_>emulate_nimbro_delay_){
+    if(emulate_nimbro_time_>=emulate_nimbro_delay_){
       emulate_nimbro_time_ = 0;
     }
   }
