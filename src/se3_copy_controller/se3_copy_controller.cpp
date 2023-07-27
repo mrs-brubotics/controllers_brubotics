@@ -216,7 +216,8 @@ private:
   std_msgs::Float64 ros_time_l_to_f_;
   std_msgs::Float64 ros_time_delay_;
   std_msgs::Float64 Eland_time_;
-  double _max_time_delay_safety_communication_;
+  // double _max_time_delay_safety_communication_;
+  double _max_time_delay_eland_;
   bool Eland_status_ = false;
   // double _max_time_delay_on_callback_data_follower_;
   // double _max_time_delay_on_callback_data_leader_;
@@ -423,7 +424,8 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("payload/Epl_max/scaling", _Epl_max_scaling_);
   param_loader.loadParam("payload/swing_angle/failsafe_enabled", max_swing_angle_failsafe_enabled_);  
   param_loader.loadParam("payload/swing_angle/max", max_swing_angle_);
-  param_loader.loadParam("two_uavs_payload/max_time_delay_safety_communication", _max_time_delay_safety_communication_);
+  // param_loader.loadParam("two_uavs_payload/max_time_delay_safety_communication", _max_time_delay_safety_communication_);
+  param_loader.loadParam("two_uavs_payload/max_time_delay_eland", _max_time_delay_eland_);
   // param_loader.loadParam("two_uavs_payload/n_ros_time_triggers",n_ros_time_triggers_);
   // param_loader.loadParam("two_uavs_payload/ros_time_delay/n_ros_time_l_to_f",n_ros_time_l_to_f_);
   // param_loader.loadParam("two_uavs_payload/ros_time_delay/ros_time_l_to_f_period",ros_time_l_to_f_period_);
@@ -1888,7 +1890,7 @@ void Se3CopyController::SafetyCommunication(void) {
     ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
 
     // Detection start of communication
-    if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_safety_communication_ && !both_uavs_connected_){ 
+    if(time_delay_Eland_controller_follower_to_leader_out_.data < _max_time_delay_eland_ && !both_uavs_connected_){ 
       connection_time_ = ros::Time::now().toSec();
       ROS_INFO("[Se3CopyController]: Both UAVs are connected");
       both_uavs_connected_ = true;
@@ -1912,7 +1914,7 @@ void Se3CopyController::SafetyCommunication(void) {
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
       Eland_status = true;
     }
-    if(time_delay_Eland_controller_follower_to_leader_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_){ // Eland if time since last received message from follower is > _max_time_delay_safety_communication_
+    if(time_delay_Eland_controller_follower_to_leader_out_.data > _max_time_delay_eland_ && both_uavs_ready_){ // Eland if time since last received message from follower is > _max_time_delay_eland_
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
       Eland_status = true;
@@ -1939,7 +1941,7 @@ void Se3CopyController::SafetyCommunication(void) {
     //   ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
     //   Eland_status_ = true;
     // }
-    // if(time_delay_Eland_controller_follower_to_leader_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_){ // Eland if time since last received message from follower is > _max_time_delay_safety_communication_
+    // if(time_delay_Eland_controller_follower_to_leader_out_.data > _max_time_delay_eland_ && both_uavs_ready_){ // Eland if time since last received message from follower is > _max_time_delay_eland_
     //   ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
     //   ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_follower_to_leader_ = %f",time_delay_Eland_controller_follower_to_leader_out_.data);
     //   Eland_status_ = true;
@@ -1975,7 +1977,7 @@ void Se3CopyController::SafetyCommunication(void) {
     ROS_INFO_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
 
     // Detection start of communication
-    if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_safety_communication_ && !both_uavs_connected_){
+    if(time_delay_Eland_controller_leader_to_follower_out_.data < _max_time_delay_eland_ && !both_uavs_connected_){
       connection_time_ = ros::Time::now().toSec();
       ROS_INFO_STREAM("[Se3CopyController]: Both UAVs are connected");
       both_uavs_connected_ = true;
@@ -1999,7 +2001,7 @@ void Se3CopyController::SafetyCommunication(void) {
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
       Eland_status = true;
     }
-    if(time_delay_Eland_controller_leader_to_follower_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_ && is_active_){ // Eland if time since last received message from follower is > _max_time_delay_safety_communication_
+    if(time_delay_Eland_controller_leader_to_follower_out_.data > _max_time_delay_eland_ && both_uavs_ready_ && is_active_){ // Eland if time since last received message from follower is > _max_time_delay_eland_
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
       ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
       Eland_status = true;
@@ -2026,7 +2028,7 @@ void Se3CopyController::SafetyCommunication(void) {
     //   ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (1)");
     //   Eland_status_ = true;
     // }
-    // if(time_delay_Eland_controller_leader_to_follower_out_.data > _max_time_delay_safety_communication_ && both_uavs_ready_ && is_active_){ // Eland if time since last received message from follower is > _max_time_delay_safety_communication_
+    // if(time_delay_Eland_controller_leader_to_follower_out_.data > _max_time_delay_eland_ && both_uavs_ready_ && is_active_){ // Eland if time since last received message from follower is > _max_time_delay_eland_
     //   ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Eland (2)");
     //   ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: time_delay_Eland_controller_leader_to_follower_ = %f",time_delay_Eland_controller_leader_to_follower_out_.data);
     //   Eland_status_ = true;

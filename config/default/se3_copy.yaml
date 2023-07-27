@@ -85,7 +85,7 @@ payload:
     max: deg(60)  # Eland if max swing angle is reached to avoid hitting the legs of the UAV
 
 two_uavs_payload:
-  max_time_delay_safety_communication: 0.4 # [s] max time delay between UAVs before Eland
+  max_time_delay_eland: 0.4 # [s] max time delay between UAVs before Eland
   ros_time_difference:
     ros_time_difference_delay: 10 # [s] Delay before messages to determine ros time difference are sent
     ros_time_difference_duration: 8 # [s] Duration of sending messages to determine ros time difference
