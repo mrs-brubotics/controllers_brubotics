@@ -432,6 +432,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("two_uavs_payload/ready_delay", ready_delay_); 
   param_loader.loadParam("two_uavs_payload/ros_time_difference/ros_time_difference_delay", ros_time_difference_delay_);
   param_loader.loadParam("two_uavs_payload/ros_time_difference/ros_time_difference_duration", ros_time_difference_duration_);
+  param_loader.loadParam("two_uavs_payload/ros_time_difference/enabled", ros_time_difference_enabled_);
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro", emulate_nimbro_);
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro_delay", emulate_nimbro_delay_);
   param_loader.loadParam("ros_info_throttle_period", ROS_INFO_THROTTLE_PERIOD);
@@ -674,7 +675,9 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       }
     }
     else{ // Before activation, communication to determine ros time difference
-      RosTimeDifference();
+      if(ros_time_difference_enabled_){
+        RosTimeDifference();
+      }
     }
   }
 

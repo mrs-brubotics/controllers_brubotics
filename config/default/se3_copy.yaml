@@ -87,6 +87,7 @@ payload:
 two_uavs_payload:
   max_time_delay_eland: 0.4 # [s] max time delay between UAVs before Eland
   ros_time_difference:
+    enabled: true
     ros_time_difference_delay: 10 # [s] Delay before messages to determine ros time difference are sent
     ros_time_difference_duration: 8 # [s] Duration of sending messages to determine ros time difference
   ready_delay: 2 # [s] Delay between when UAVs first receive Eland_state messages and when they Eland if the message delay is too high  
