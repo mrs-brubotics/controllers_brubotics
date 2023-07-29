@@ -226,6 +226,7 @@ private:
   double connection_time_ = 0;
   double ros_time_difference_delay_;
   double ros_time_difference_duration_;
+  bool ros_time_difference_enabled_;
   bool busy_ros_time_l_to_f_ = false;
   double ready_delay_;
   bool both_uavs_ready_ = false;
