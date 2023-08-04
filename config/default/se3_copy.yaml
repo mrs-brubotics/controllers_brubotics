@@ -94,5 +94,8 @@ two_uavs_payload:
   nimbro:
     emulate_nimbro: false
     emulate_nimbro_delay: 0
+  distance_uavs:
+    failsafe_enabled: true
+    max_error: 0.75 # [m] Safety landing if the distance between both UAVs differs too much load_length
   
 ros_info_throttle_period: 0.1 # period of prints in the controller and tracker

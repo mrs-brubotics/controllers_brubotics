@@ -77,6 +77,7 @@ private:
   double _cable_length_;          // length of the cable between payload COM / anchoring point and COM of the UAV
   double _cable_length_offset_; // accounts for the fact that the cable is attached below the UAV's COM
   double _load_mass_;             // feedforward load mass per uav defined in the session.yaml of every test file (session variable also used by the xacro for Gazebo simulation)
+  double _load_length_;         // length of bar load transported by 2uavs
   bool _baca_in_simulation_=false;// Used to validate the encoder angles, and the FK without having to make the UAV fly. Gains related to payload must be set on 0 to perform this. Set on false by default.
   //emulate nimbro
   bool emulate_nimbro_ = false;
@@ -179,6 +180,8 @@ private:
   // ros::Publisher ros_time_trigger_l_pub_;
   ros::Publisher time_delay_Eland_controller_leader_to_follower_pub_;
   ros::Publisher time_delay_Eland_controller_follower_to_leader_pub_;
+  // Distance between the two UAVs
+  ros::Publisher distance_uavs_pub_;
 
   // ---------------
   // ROS Subscribers:
@@ -231,6 +234,15 @@ private:
   double ready_delay_;
   bool both_uavs_ready_ = false;
   bool deactivated_ = false;
+  bool distance_uavs_failsafe_enabled_ = false;
+  bool distance_uavs_ready_ = false;
+  double distance_uavs_max_error_;
+    // Distance between the two UAVs
+  std_msgs::Float64 distance_UAVs_out_;
+  ros::Subscriber uav_state_follower_for_leader_sub_;
+  void uav_state_follower_for_leader_callback(const mrs_msgs::UavState::ConstPtr& msg);
+  mrs_msgs::UavState uav_state_follower_for_leader_;
+
   // int n_ros_time_triggers_;
   // int i_ros_time_triggers_ = 0;
   // bool determine_ros_time_delay_;
@@ -332,6 +344,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
     }
     else if (_type_of_system_=="2uavs_payload"){ 
       _load_mass_ = 0.50 * std::stod(getenv("LOAD_MASS")); // in case of 2uavs, each uav takes only half of the total bar-type load
+      _load_length_ = std::stod(getenv("LOAD_LENGTH"));
       _leader_uav_name_ = "uav"+std::to_string(std::stoi(getenv("LEADER_UAV_ID")));
       _follower_uav_name_ = "uav"+std::to_string(std::stoi(getenv("FOLLOWER_UAV_ID")));
       // Sanity check:
@@ -436,6 +449,8 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   param_loader.loadParam("two_uavs_payload/ros_time_difference/enabled", ros_time_difference_enabled_);
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro", emulate_nimbro_);
   param_loader.loadParam("two_uavs_payload/nimbro/emulate_nimbro_delay", emulate_nimbro_delay_);
+  param_loader.loadParam("two_uavs_payload/distance_uavs/failsafe_enabled", distance_uavs_failsafe_enabled_);
+  param_loader.loadParam("two_uavs_payload/distance_uavs/max_error", distance_uavs_max_error_);
   param_loader.loadParam("ros_info_throttle_period", ROS_INFO_THROTTLE_PERIOD);
  
   
@@ -478,6 +493,8 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
       time_delay_Eland_controller_follower_to_leader_pub_ = nh_.advertise<std_msgs::Float64>("time_delay_Eland_controller_follower_to_leader",1);
       // ros_time_trigger_l_pub_ = nh_.advertise<std_msgs::Bool>("ros_time_trigger_l",1);
       ros_time_l_to_f_pub_ = nh_.advertise<std_msgs::Float64>("ros_time_l_to_f",1);
+
+      distance_uavs_pub_ = nh_.advertise<std_msgs::Float64>("distance_uavs", 1);
     }
     else if(_uav_name_ == _follower_uav_name_){
       Eland_controller_follower_to_leader_pub_ = nh_.advertise<mrs_msgs::BoolStamped>("Eland_contr_f_to_l",1);
@@ -511,6 +528,7 @@ void Se3CopyController::initialize(const ros::NodeHandle& parent_nh, [[maybe_unu
   if(_type_of_system_=="2uavs_payload"){
     if (_uav_name_ == _leader_uav_name_){  // leader
       Eland_controller_follower_to_leader_sub_ = nh_.subscribe("/"+_follower_uav_name_+"/control_manager/se3_copy_controller/Eland_contr_f_to_l", 1, &Se3CopyController::ElandFollowerToLeaderCallback, this, ros::TransportHints().tcpNoDelay());
+      uav_state_follower_for_leader_sub_ = nh2_.subscribe("/"+_follower_uav_name_+"/control_manager/dergbryan_tracker/uav_state_f_for_l", 1, &Se3CopyController::uav_state_follower_for_leader_callback, this, ros::TransportHints().tcpNoDelay());
     }
     else if(_uav_name_ == _follower_uav_name_){
       Eland_controller_leader_to_follower_sub_ = nh_.subscribe("/"+_leader_uav_name_+"/control_manager/se3_copy_controller/Eland_contr_l_to_f", 1, &Se3CopyController::ElandLeaderToFollowerCallback, this, ros::TransportHints().tcpNoDelay());
@@ -696,6 +714,36 @@ const mrs_msgs::AttitudeCommand::ConstPtr Se3CopyController::update(const mrs_ms
       }
     }
   }
+
+  // distance between both UAVs
+  if(_type_of_system_=="2uavs_payload"){
+    if(distance_uavs_failsafe_enabled_){
+      if(both_uavs_ready_ && distance_uavs_ready_){
+        Eigen::Vector3d pos_leader(uav_state_.pose.position.x, uav_state_.pose.position.y, uav_state_.pose.position.z);
+        Eigen::Vector3d pos_follower(uav_state_follower_for_leader_.pose.position.x, uav_state_follower_for_leader_.pose.position.y, uav_state_follower_for_leader_.pose.position.z);
+        // ROS_INFO_STREAM("[Se3CopyController]: position leader" <<pos_leader);
+        // ROS_INFO_STREAM("[Se3CopyController]: position follower" <<pos_follower);
+        distance_UAVs_out_.data = (pos_leader - pos_follower).norm();
+        // ROS_INFO_STREAM("[Se3CopyController]: distance_uavs = " << distance_UAVs_out_.data);
+        if(distance_UAVs_out_.data > _load_length_ + distance_uavs_max_error_){
+          ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Distance between both UAvs %f > %f ==> Eland",distance_UAVs_out_.data,_load_length_ + distance_uavs_max_error_);
+          return mrs_msgs::AttitudeCommand::ConstPtr();
+        }
+        else if(distance_UAVs_out_.data < _load_length_ - distance_uavs_max_error_){
+          ROS_WARN_THROTTLE(ROS_INFO_THROTTLE_PERIOD,"[Se3CopyController]: Distance between both UAvs %f < %f ==> Eland",distance_UAVs_out_.data,_load_length_ - distance_uavs_max_error_);
+          return mrs_msgs::AttitudeCommand::ConstPtr();
+        }   
+      }  
+      try {
+        distance_uavs_pub_.publish(distance_UAVs_out_);
+      }
+      catch (...) {
+        ROS_ERROR("[DergbryanTracker]: Exception caught during publishing topic %s.", distance_uavs_pub_.getTopic().c_str());
+      } 
+    }
+  }
+
+      
 
   if (!is_active_) {
     return mrs_msgs::AttitudeCommand::ConstPtr();
@@ -2336,6 +2384,15 @@ void Se3CopyController::rosTimeLeaderToFollowerCallback(const std_msgs::Float64&
   catch (...) {
     ROS_ERROR("[Se3CopyController]: Exception caught during publishing topic %s.", ros_time_delay_pub_.getTopic().c_str());
   }
+}
+
+// Used to compute distance between UAVs (safety feature)
+void Se3CopyController::uav_state_follower_for_leader_callback(const mrs_msgs::UavState::ConstPtr& msg){
+  // ROS_INFO_STREAM("[Se3CopyController]: Leader received UAV state of follower in controller");
+  if(!distance_uavs_ready_){
+    distance_uavs_ready_ = true;
+  }
+  uav_state_follower_for_leader_ = *msg;
 }
 
 
