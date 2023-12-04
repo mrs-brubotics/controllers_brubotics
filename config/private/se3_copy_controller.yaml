@@ -1,0 +1,84 @@
+controllers_brubotics:
+
+  se3_copy_controller:
+
+    se3:
+
+      default_gains:
+
+        # Gains in this section SHOULD NOT BE CHANGED, since they are not used most of the times.
+        # Gains which are actually used are in the mrs_uav_manager package under the gain_manager configs
+
+        horizontal:
+          kp: 3.0
+          kv: 2.0
+          ka: 1.0
+
+          attitude:
+            kq: 5.0
+
+          kib: 0.1
+          kib_lim: 10.0
+
+          kiw: 0.1
+          kiw_lim: 10.0
+
+          kpl: 0.0
+          kvl: 0.0
+
+        vertical:
+          kp: 15.0
+          kv: 8.0
+          ka: 1.0
+
+        attitude:
+          kq_roll_pitch: 3.0 # TODO kq: 5.0 was original value
+          kq_yaw: 2.0 # TODO kq: 5.0 was original value
+
+        mass_estimator:
+          km: 1.0
+          km_lim: 3.0 # [kg, at least 1/2 of the UAVs mass to allow landing detection] # TODO 0.15 #0.3 #1.0 #3.0 # were values
+
+      attitude_rate_gains:
+        kw_roll_pitch: 4.0
+        kw_yaw: 4.0
+
+      rampup:
+        enabled: true
+        speed: 0.75 # [1/s]
+
+      gain_filtering:
+
+        rate: 10.0 # [Hz]
+
+        perc_change_rate: 1.0 # [100%/s]
+        min_change_rate: 0.2 # perc of the difference
+
+        # gains can be muted by the tracker by this factor
+        # gains are also muting just after activation
+        gain_mute_coefficient: 0.5 # [-]
+        
+    payload:
+      Epl_min: 0.05 # [m], below this payload error norm, the payload error is disabled
+      Epl_max:
+        failsafe_enabled: true
+        scaling: 1.0 # keep scaling on 1.0. It triggers Eland if payload angles in world frame reach 90° (avoids singularity)
+      swing_angle:
+        failsafe_enabled: true
+        max: deg(60)  # Eland if max swing angle is reached to avoid hitting the legs of the UAV
+
+    two_uavs_payload:
+      max_time_delay_eland: 0.4 # [s] max time delay between UAVs before Eland
+      ros_time_difference:
+        enabled: true
+        ros_time_difference_delay: 10 # [s] Delay before messages to determine ros time difference are sent
+        ros_time_difference_duration: 8 # [s] Duration of sending messages to determine ros time difference
+      ready_delay: 2 # [s] Delay between when UAVs first receive Eland_state messages and when they Eland if the message delay is too high  
+      nimbro:
+        emulate_nimbro: false
+        emulate_nimbro_delay: 0
+      distance_uavs:
+        failsafe_enabled: true
+        max_error: 0.75 # [m] Safety landing if the distance between both UAVs differs too much load_length
+      
+    ros_info_throttle_period: 0.1 # period of prints in the controller and tracker

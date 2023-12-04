@@ -1,5 +1,5 @@
-<library path="lib/libSe3CopyController">
-  <class name="controllers_brubotics/Se3CopyController" type="mrs_uav_controllers::se3_copy_controller::Se3CopyController" base_class_type="mrs_uav_managers::Controller">
-    <description>This is Se3CopyController and is the original Se3Controller copied from CTU which is only extended with some publishers for plotting graphs.</description>
+<library path="lib/libControllersBrubotics_Se3CopyController">
+  <class name="controllers_brubotics/Se3CopyController" type="controllers_brubotics::se3_copy_controller::Se3CopyController" base_class_type="mrs_uav_managers::Controller">
+    <description>This is the Se3CopyController.</description>
   </class>
 </library>
