@@ -1,0 +1,25 @@
+# similar to ~/mrs_workspace/src/uav_core/ros_packages/mrs_uav_managers/config/default/controllers.yaml
+Se3CopyController:
+  address: "controllers_brubotics/Se3CopyController"
+  namespace: "se3_copy_controller"
+  eland_threshold: 300 # 1.5 = original CTU value [m], position error triggering eland
+  failsafe_threshold: 300 # 2.5 = original CTU value [m], position error triggering failsafe land
+  odometry_innovation_threshold: 300 # 1.5 = original CTU value [m], position odometry innovation threshold
+Se3BruboticsController:
+  address: "controllers_brubotics/Se3BruboticsController"
+  namespace: "se3_brubotics_controller"
+  eland_threshold: 300 # 1.5 = original CTU value [m], position error triggering eland
+  failsafe_threshold: 300 # 2.5 = original CTU value [m], position error triggering failsafe land
+  odometry_innovation_threshold: 300 # 1.5 = original CTU value [m], position odometry innovation threshold
+Se3BruboticsLoadController:
+  address: "controllers_brubotics/Se3BruboticsLoadController"
+  namespace: "se3_brubotics_load_controller"
+  eland_threshold: 300 # 1.5 = original CTU value [m], position error triggering eland
+  failsafe_threshold: 300 # 2.5 = original CTU value [m], position error triggering failsafe land
+  odometry_innovation_threshold: 300 # 1.5 = original CTU value [m], position odometry innovation threshold
+# Se3BruboticsPmController:
+#   address: "controllers_brubotics/Se3BruboticsPmController"
+#   namespace: "se3_brubotics_pm_controller"
+#   eland_threshold: 300 # 1.5 = original CTU value [m], position error triggering eland
+#   failsafe_threshold: 300 # 2.5 = original CTU value [m], position error triggering failsafe land
+#   odometry_innovation_threshold: 300 # 1.5 = original CTU value [m], position odometry innovation threshold
