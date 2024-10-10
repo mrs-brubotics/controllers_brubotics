@@ -9,7 +9,7 @@
   <!-- Parameter loading -->
   <!-- se3_copy_controller -->
   <rosparam ns="$(env UAV_NAME)/control_manager/se3_copy_controller" file="$(find controllers_brubotics)/config/public/se3_copy_controller.yaml" /> 
-  <!-- <rosparam ns="$(env UAV_NAME)/control_manager/se3_copy_controller" file="$(find controllers_brubotics)/config/$(arg RUN_TYPE)/$(arg UAV_TYPE)/se3_copy.yaml" /> -->
+  <rosparam ns="$(env UAV_NAME)/control_manager/se3_copy_controller" file="$(find controllers_brubotics)/config/private/se3_copy_controller.yaml" />
   <rosparam if="$(eval not arg('custom_config_se3_copy_controller') == '')" ns="$(env UAV_NAME)/control_manager/se3_copy_controller" file="$(arg custom_config_se3_copy_controller)" />
   <param name="$(env UAV_NAME)/control_manager/se3_copy_controller/enable_profiler" type="bool" value="$(arg PROFILER)" />
   <remap from="~$(env UAV_NAME)/control_manager/se3_copy_controller/profiler" to="profiler" />
