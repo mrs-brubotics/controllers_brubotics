@@ -31,6 +31,9 @@ controllers_brubotics:
           kv: 8.0
           ka: 1.0
 
+          kpl: 0.0
+          kvl: 0.0
+
         attitude:
           kq_roll_pitch: 3.0 # TODO kq: 5.0 was original value
           kq_yaw: 2.0 # TODO kq: 5.0 was original value
@@ -65,7 +68,7 @@ controllers_brubotics:
         scaling: 1.0 # keep scaling on 1.0. It triggers Eland if payload angles in world frame reach 90° (avoids singularity)
       swing_angle:
         failsafe_enabled: true
-        max: deg(60)  # Eland if max swing angle is reached to avoid hitting the legs of the UAV
+        max: 60.0  # [deg] Eland if max swing angle is reached to avoid hitting the legs of the UAV
 
     two_uavs_payload:
       max_time_delay_eland: 0.4 # [s] max time delay between UAVs before Eland
