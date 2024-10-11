@@ -31,6 +31,9 @@ controllers_brubotics:
           kv: 8.0
           ka: 1.0
 
+          attitude:
+            kq: 5.0
+
           kpl: 0.0
           kvl: 0.0
 
